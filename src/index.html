@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Billing Software - Login</title>
+  <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #4F46E5; --primary-hover: #4338CA; --primary-light: #EEF2FF;
+      --success: #10B981; --warning: #F59E0B; --danger: #EF4444;
+      --bg: #F9FAFB; --surface: #fff; --text: #111827; --text-muted: #6B7280;
+      --border: #E5E7EB; --radius: 12px;
+    }
+    body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .auth-container { width: 100%; max-width: 460px; }
+    .auth-logo { text-align: center; margin-bottom: 2rem; }
+    .auth-logo h1 { font-size: 1.75rem; color: var(--primary); display: flex; align-items: center; justify-content: center; gap: .5rem; }
+    .auth-logo h1 i { font-size: 2rem; }
+    .auth-logo p { color: var(--text-muted); margin-top: .25rem; font-size: .9rem; }
+    .auth-card { background: var(--surface); border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 30px rgba(0,0,0,.06); padding: 2rem; }
+    .auth-card h2 { font-size: 1.35rem; margin-bottom: .25rem; }
+    .auth-card .subtitle { color: var(--text-muted); font-size: .875rem; margin-bottom: 1.5rem; }
+    .form-group { margin-bottom: 1.25rem; }
+    .form-group label { display: block; font-size: .875rem; font-weight: 500; margin-bottom: .375rem; }
+    .form-group input, .form-group select { width: 100%; padding: .625rem .875rem; border: 1px solid var(--border); border-radius: 8px; font-size: .9rem; transition: border-color .2s, box-shadow .2s; outline: none; background: var(--surface); font-family: inherit; }
+    .form-group input:focus, .form-group select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+    .form-row { display: flex; gap: 1rem; }
+    .form-row .form-group { flex: 1; }
+    .form-check { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+    .form-check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary); }
+    .form-check label { font-size: .85rem; color: var(--text-muted); cursor: pointer; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; padding: .65rem 1.25rem; border: none; border-radius: 8px; font-size: .9rem; font-weight: 500; cursor: pointer; transition: all .2s; font-family: inherit; text-decoration: none; }
+    .btn-primary { background: var(--primary); color: #fff; width: 100%; }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79,70,229,.3); }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+    .divider { display: flex; align-items: center; gap: 1rem; margin: 1.5rem 0; color: var(--text-muted); font-size: .8rem; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .demo-roles { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .75rem; }
+    .demo-role { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 1rem .75rem; text-align: center; cursor: pointer; transition: all .2s; }
+    .demo-role:hover { border-color: var(--primary); background: var(--primary-light); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(79,70,229,.15); }
+    .demo-role i { font-size: 1.75rem; color: var(--primary); display: block; margin-bottom: .35rem; }
+    .demo-role span { font-size: .8rem; font-weight: 600; color: var(--text); }
+    .demo-role small { display: block; font-size: .7rem; color: var(--text-muted); margin-top: .15rem; }
+    .auth-footer { text-align: center; margin-top: 1.25rem; font-size: .85rem; color: var(--text-muted); }
+    .auth-footer a { color: var(--primary); text-decoration: none; font-weight: 500; }
+    .auth-footer a:hover { text-decoration: underline; }
+    .link-btn { background: none; border: none; color: var(--primary); cursor: pointer; font-size: .85rem; font-weight: 500; font-family: inherit; }
+    .link-btn:hover { text-decoration: underline; }
+    .form-footer { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+    .hidden { display: none !important; }
+    .password-wrapper { position: relative; }
+    .password-wrapper input { padding-right: 2.5rem; }
+    .password-toggle { position: absolute; right: .75rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem; }
+    .social-login { display: flex; gap: .75rem; margin-bottom: 1.25rem; }
+    .social-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: .5rem; padding: .6rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); cursor: pointer; font-size: .85rem; transition: all .2s; color: var(--text); }
+    .social-btn:hover { background: #f3f4f6; border-color: #d1d5db; }
+    .social-btn i { font-size: 1.2rem; }
+    .alert { padding: .75rem 1rem; border-radius: 8px; font-size: .85rem; margin-bottom: 1rem; display: none; }
+    .alert-success { background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; }
+    .alert-error { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+    @media (max-width: 480px) {
+      .auth-card { padding: 1.5rem; }
+      .demo-roles { grid-template-columns: 1fr; }
+      .form-row { flex-direction: column; gap: 0; }
+      .social-login { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="auth-container">
+  <div class="auth-logo">
+    <h1><i class='bx bx-receipt'></i> BillFlow</h1>
+    <p>Universal Billing Software Platform</p>
+  </div>
+
+  <!-- Login Form -->
+  <div class="auth-card" id="loginForm">
+    <h2>Welcome back</h2>
+    <p class="subtitle">Sign in to your account to continue</p>
+    <div class="alert alert-error" id="loginError">Invalid credentials. Please try again.</div>
+    <div class="alert alert-success" id="loginSuccess">Login successful! Redirecting...</div>
+
+    <div class="social-login">
+      <button class="social-btn" onclick="demoLogin('admin')"><i class='bx bxl-google'></i> Google</button>
+      <button class="social-btn" onclick="demoLogin('admin')"><i class='bx bxl-facebook'></i> Facebook</button>
+      <button class="social-btn" onclick="demoLogin('admin')"><i class='bx bxl-apple'></i> Apple</button>
+    </div>
+
+    <div class="divider">or sign in with email</div>
+
+    <form onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label for="loginEmail">Email Address</label>
+        <input type="email" id="loginEmail" placeholder="you@example.com" value="admin@billflow.com">
+      </div>
+      <div class="form-group">
+        <label for="loginPassword">Password</label>
+        <div class="password-wrapper">
+          <input type="password" id="loginPassword" placeholder="Enter your password" value="demo1234">
+          <button type="button" class="password-toggle" onclick="togglePassword('loginPassword', this)"><i class='bx bx-hide'></i></button>
+        </div>
+      </div>
+      <div class="form-footer">
+        <div class="form-check">
+          <input type="checkbox" id="remember" checked>
+          <label for="remember">Remember me</label>
+        </div>
+        <button type="button" class="link-btn" onclick="showForm('forgotForm')">Forgot password?</button>
+      </div>
+      <button type="submit" class="btn btn-primary"><i class='bx bx-log-in'></i> Sign In</button>
+    </form>
+
+    <div class="divider">Quick Demo Access</div>
+    <div class="demo-roles">
+      <div class="demo-role" onclick="demoLogin('admin')">
+        <i class='bx bx-shield-quarter'></i>
+        <span>Admin</span>
+        <small>Full access</small>
+      </div>
+      <div class="demo-role" onclick="demoLogin('provider')">
+        <i class='bx bx-store'></i>
+        <span>Provider</span>
+        <small>Shop owner</small>
+      </div>
+      <div class="demo-role" onclick="demoLogin('customer')">
+        <i class='bx bx-user'></i>
+        <span>Customer</span>
+        <small>Buyer access</small>
+      </div>
+    </div>
+
+    <div class="auth-footer">
+      Don't have an account? <a href="#" onclick="showForm('registerForm'); return false;">Create account</a>
+    </div>
+  </div>
+
+  <!-- Register Form -->
+  <div class="auth-card hidden" id="registerForm">
+    <h2>Create Account</h2>
+    <p class="subtitle">Join BillFlow to get started</p>
+
+    <form onsubmit="handleRegister(event)">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="regFirst">First Name</label>
+          <input type="text" id="regFirst" placeholder="John">
+        </div>
+        <div class="form-group">
+          <label for="regLast">Last Name</label>
+          <input type="text" id="regLast" placeholder="Doe">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="regEmail">Email Address</label>
+        <input type="email" id="regEmail" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label for="regPhone">Mobile Number</label>
+        <input type="tel" id="regPhone" placeholder="+91 98765 43210">
+      </div>
+      <div class="form-group">
+        <label for="regRole">Register As</label>
+        <select id="regRole">
+          <option value="customer">Customer</option>
+          <option value="provider">Service Provider</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="regPassword">Password</label>
+        <div class="password-wrapper">
+          <input type="password" id="regPassword" placeholder="Min 8 characters">
+          <button type="button" class="password-toggle" onclick="togglePassword('regPassword', this)"><i class='bx bx-hide'></i></button>
+        </div>
+      </div>
+      <div class="form-check">
+        <input type="checkbox" id="terms" checked>
+        <label for="terms">I agree to the <a href="#" style="color:var(--primary)">Terms & Conditions</a></label>
+      </div>
+      <button type="submit" class="btn btn-primary"><i class='bx bx-user-plus'></i> Create Account</button>
+    </form>
+
+    <div class="auth-footer">
+      Already have an account? <a href="#" onclick="showForm('loginForm'); return false;">Sign in</a>
+    </div>
+  </div>
+
+  <!-- Forgot Password Form -->
+  <div class="auth-card hidden" id="forgotForm">
+    <h2>Reset Password</h2>
+    <p class="subtitle">Enter your email and we'll send you a reset link</p>
+    <div class="alert alert-success" id="resetSuccess">Reset link sent! Check your email.</div>
+
+    <form onsubmit="handleForgot(event)">
+      <div class="form-group">
+        <label for="forgotEmail">Email Address</label>
+        <input type="email" id="forgotEmail" placeholder="you@example.com">
+      </div>
+      <button type="submit" class="btn btn-primary"><i class='bx bx-envelope'></i> Send Reset Link</button>
+    </form>
+
+    <div class="auth-footer">
+      Remember your password? <a href="#" onclick="showForm('loginForm'); return false;">Back to login</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showForm(formId) {
+    document.querySelectorAll('.auth-card').forEach(f => f.classList.add('hidden'));
+    document.getElementById(formId).classList.remove('hidden');
+  }
+
+  function togglePassword(inputId, btn) {
+    const input = document.getElementById(inputId);
+    const icon = btn.querySelector('i');
+    if (input.type === 'password') {
+      input.type = 'text';
+      icon.className = 'bx bx-show';
+    } else {
+      input.type = 'password';
+      icon.className = 'bx bx-hide';
+    }
+  }
+
+  function handleLogin(e) {
+    e.preventDefault();
+    const successEl = document.getElementById('loginSuccess');
+    successEl.style.display = 'block';
+    document.getElementById('loginError').style.display = 'none';
+    setTimeout(() => { window.location.href = 'app.html#admin-dashboard'; }, 600);
+  }
+
+  function handleRegister(e) {
+    e.preventDefault();
+    const role = document.getElementById('regRole').value;
+    const route = role === 'provider' ? 'provider-dashboard' : 'customer-home';
+    localStorage.setItem('billflow_role', role);
+    window.location.href = 'app.html#' + route;
+  }
+
+  function handleForgot(e) {
+    e.preventDefault();
+    document.getElementById('resetSuccess').style.display = 'block';
+    setTimeout(() => showForm('loginForm'), 2000);
+  }
+
+  function demoLogin(role) {
+    localStorage.setItem('billflow_role', role);
+    const routes = { admin: 'admin-dashboard', provider: 'provider-dashboard', customer: 'customer-home' };
+    window.location.href = 'app.html#' + routes[role];
+  }
+</script>
+
+</body>
+</html>
