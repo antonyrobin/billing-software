@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BillFlow — Universal Billing Software</title>
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside id="sidebar"></aside>
+    <div class="sidebar-overlay" onclick="App.closeSidebar()"></div>
+
+    <!-- Main -->
+    <div id="main">
+      <header id="topbar"></header>
+      <main id="content"></main>
+    </div>
+
+    <!-- Mobile Bottom Nav -->
+    <nav id="mobile-nav"></nav>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- Scripts (loaded in order) -->
+  <script src="js/data.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/pages.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
