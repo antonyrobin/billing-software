@@ -1,0 +1,245 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deployment.yml
+#
+# Kubernetes Deployment Manifest for a Billing Software Service
+# This is a sample for the Identity Service — adapt for other services.
+#
+# Features:
+#   • Rolling update strategy (zero-downtime deployments)
+#   • Liveness and readiness probes
+#   • Resource requests and limits
+#   • Environment variables from Secrets and ConfigMaps
+#   • Pod Disruption Budget for HA
+#   • Anti-affinity rules (spread pods across nodes)
+#   • Security context (non-root, read-only filesystem)
+#
+# Apply:
+#   kubectl apply -f deployment.yml -n billing-prod
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing-identity
+  namespace: billing-prod
+  labels:
+    app: billing-identity
+    version: "1.0.0"
+    component: backend
+    part-of: billing-software
+  annotations:
+    # Record the deployer and commit for auditability
+    deployment.kubernetes.io/deployer: "github-actions"
+    deployment.kubernetes.io/commit: "{{ GIT_SHA }}"  # Replaced by CI/CD
+spec:
+  # ── Replica count managed by HPA (hpa.yml) — this is the initial count ──
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: billing-identity
+
+  # ── Rolling update: replace pods one at a time, never have 0 running ────────
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1           # Can have 1 extra pod during rollout
+      maxUnavailable: 0     # Never reduce below desired replica count
+
+  template:
+    metadata:
+      labels:
+        app: billing-identity
+        version: "1.0.0"
+      annotations:
+        # Force pod restart when ConfigMap changes
+        checksum/config: "{{ CONFIGMAP_CHECKSUM }}"  # Replaced by CI/CD
+
+    spec:
+      # ── Service account with Azure Workload Identity for Key Vault ──────────
+      serviceAccountName: billing-identity-sa
+
+      # ── Security context: pod-level ────────────────────────────────────────
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        # Prevent privilege escalation
+        seccompProfile:
+          type: RuntimeDefault
+
+      # ── Spread pods across nodes for HA ────────────────────────────────────
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values: [billing-identity]
+                topologyKey: kubernetes.io/hostname
+
+      # ── Terminate gracefully (wait for in-flight requests to complete) ──────
+      terminationGracePeriodSeconds: 60
+
+      containers:
+        - name: identity
+          # Image tag replaced by CI/CD pipeline with git SHA
+          image: registry.digitalocean.com/billing/billing-identity:{{ GIT_SHA }}
+          imagePullPolicy: Always
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          # ── Security context: container-level ──────────────────────────────
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+
+          # ── Resource limits: prevent noisy neighbor issues ─────────────────
+          # Tune based on load testing results
+          resources:
+            requests:
+              memory: "128Mi"   # Guaranteed memory
+              cpu: "100m"       # 0.1 vCPU guaranteed
+            limits:
+              memory: "512Mi"   # Max memory before OOM kill
+              cpu: "500m"       # Max 0.5 vCPU
+
+          # ── Environment variables ───────────────────────────────────────────
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
+
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+
+            # Inject pod info for logging (useful for correlating logs to pods)
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+
+          # ── Load secrets from Kubernetes Secret (synced from Azure Key Vault) ─
+          envFrom:
+            - secretRef:
+                name: billing-identity-secrets  # Contains DB password, JWT key, etc.
+            - configMapRef:
+                name: billing-common-config     # Non-sensitive config (URLs, feature flags)
+
+          # ── Readiness probe: don't send traffic until ready ────────────────
+          # Fails → pod removed from Service endpoints (stops receiving traffic)
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 10   # Wait 10s before first check
+            periodSeconds: 10         # Check every 10s
+            failureThreshold: 3       # Remove from rotation after 3 failures
+            successThreshold: 1       # Back in rotation after 1 success
+            timeoutSeconds: 5
+
+          # ── Liveness probe: restart if hanging ────────────────────────────
+          # Fails → pod is killed and restarted
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 30   # Give time to start up
+            periodSeconds: 30
+            failureThreshold: 3       # Kill and restart after 3 failures
+            successThreshold: 1
+            timeoutSeconds: 10
+
+          # ── Startup probe: extra time during initial startup ───────────────
+          # Disables liveness/readiness until startup completes
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            failureThreshold: 30      # Allow up to 300s (30 × 10s) to start
+            periodSeconds: 10
+
+          # ── Volume mounts ──────────────────────────────────────────────────
+          volumeMounts:
+            # Writable temp directory (needed because root FS is read-only)
+            - name: tmp-dir
+              mountPath: /tmp
+            # ASP.NET Core data protection keys (for anti-forgery, cookies)
+            - name: data-protection-keys
+              mountPath: /app/keys
+              readOnly: false
+            # JWT public key (mounted from ConfigMap, not secret)
+            - name: jwt-public-key
+              mountPath: /app/certs
+              readOnly: true
+
+      # ── Volumes ────────────────────────────────────────────────────────────
+      volumes:
+        - name: tmp-dir
+          emptyDir: {}
+        - name: data-protection-keys
+          persistentVolumeClaim:
+            claimName: billing-data-protection-pvc
+        - name: jwt-public-key
+          configMap:
+            name: billing-jwt-public-key
+
+      # ── Image pull secret for private registry ─────────────────────────────
+      imagePullSecrets:
+        - name: registry-credentials
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Service: Expose the deployment within the cluster
+# External access is through the API Gateway (YARP), not directly
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: billing-identity
+  namespace: billing-prod
+  labels:
+    app: billing-identity
+spec:
+  selector:
+    app: billing-identity
+  ports:
+    - name: http
+      port: 80           # Service port (internal)
+      targetPort: 8080   # Container port
+      protocol: TCP
+  type: ClusterIP        # Internal only — accessed via YARP gateway
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# PodDisruptionBudget: Ensure HA during node maintenance/eviction
+# At least 1 pod must be available at all times
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: billing-identity-pdb
+  namespace: billing-prod
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: billing-identity

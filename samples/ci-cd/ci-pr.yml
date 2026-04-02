@@ -1,0 +1,371 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CI Quality Gates – Runs on every Pull Request
+#
+# This workflow enforces:
+#   1. Detect which services changed (path filtering)
+#   2. Build & unit-test each changed service
+#   3. Code coverage ≥ 80% (fails PR if below)
+#   4. Code format check (dotnet format)
+#   5. Security scan (Snyk / GitHub CodeQL)
+#   6. Migration validation against a fresh PostgreSQL container
+#
+# Jobs run in parallel wherever possible to keep PR feedback fast.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI – Pull Request Quality Gates
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+# Cancel in-progress runs for the same PR to avoid wasted minutes
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_NOLOGO: true
+  COVERAGE_THRESHOLD: 80
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 1: Detect which paths changed so downstream jobs only run when needed
+  # ─────────────────────────────────────────────────────────────────────────
+  detect-changes:
+    name: 🔍 Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      identity:   ${{ steps.changes.outputs.identity }}
+      catalog:    ${{ steps.changes.outputs.catalog }}
+      commerce:   ${{ steps.changes.outputs.commerce }}
+      engagement: ${{ steps.changes.outputs.engagement }}
+      gateway:    ${{ steps.changes.outputs.gateway }}
+      shared:     ${{ steps.changes.outputs.shared }}
+      migrations: ${{ steps.changes.outputs.migrations }}
+      any_service: ${{ steps.any.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check changed paths
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            identity:
+              - 'src/Services/Identity/**'
+            catalog:
+              - 'src/Services/Catalog/**'
+            commerce:
+              - 'src/Services/Commerce/**'
+            engagement:
+              - 'src/Services/Engagement/**'
+            gateway:
+              - 'src/Gateway/**'
+            shared:
+              - 'src/Shared/**'
+            migrations:
+              - 'src/Migrations/**'
+
+      # If shared or migrations changed, treat ALL services as changed
+      - name: Determine if any service needs build
+        id: any
+        run: |
+          if [[ "${{ steps.changes.outputs.shared }}" == "true" || \
+                "${{ steps.changes.outputs.migrations }}" == "true" || \
+                "${{ steps.changes.outputs.identity }}" == "true" || \
+                "${{ steps.changes.outputs.catalog }}" == "true" || \
+                "${{ steps.changes.outputs.commerce }}" == "true" || \
+                "${{ steps.changes.outputs.engagement }}" == "true" || \
+                "${{ steps.changes.outputs.gateway }}" == "true" ]]; then
+            echo "result=true" >> $GITHUB_OUTPUT
+          else
+            echo "result=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 2: Build, test, and check coverage for Identity Service
+  # ─────────────────────────────────────────────────────────────────────────
+  test-identity:
+    name: 🧪 Identity Service – Build & Test
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    # Run if identity changed OR if shared/migrations changed (affects all)
+    if: |
+      needs.detect-changes.outputs.identity == 'true' ||
+      needs.detect-changes.outputs.shared == 'true' ||
+      needs.detect-changes.outputs.migrations == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore src/Services/Identity/Identity.API/Identity.API.csproj
+
+      - name: Build
+        run: |
+          dotnet build src/Services/Identity/Identity.API/Identity.API.csproj \
+            --no-restore \
+            --configuration Release \
+            -warnaserror
+
+      - name: Run tests with coverage
+        run: |
+          dotnet test tests/Identity.Tests/Identity.Tests.csproj \
+            --no-build \
+            --configuration Release \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+      - name: Check coverage threshold
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: coverage/**/coverage.opencover.xml
+          badge: true
+          fail_below_min: true
+          format: markdown
+          hide_branch_rate: false
+          hide_complexity: true
+          indicators: true
+          output: both
+          thresholds: '${{ env.COVERAGE_THRESHOLD }} 90'
+
+      - name: Add coverage comment to PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: github.event_name == 'pull_request'
+        with:
+          header: coverage-identity
+          path: code-coverage-results.md
+
+  test-catalog:
+    name: 🧪 Catalog Service – Build & Test
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.catalog == 'true' ||
+      needs.detect-changes.outputs.shared == 'true' ||
+      needs.detect-changes.outputs.migrations == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - run: dotnet restore src/Services/Catalog/Catalog.API/Catalog.API.csproj
+      - run: dotnet build src/Services/Catalog/Catalog.API/Catalog.API.csproj --no-restore -c Release -warnaserror
+      - run: |
+          dotnet test tests/Catalog.Tests/Catalog.Tests.csproj \
+            --no-build -c Release \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+      - uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: coverage/**/coverage.opencover.xml
+          fail_below_min: true
+          thresholds: '${{ env.COVERAGE_THRESHOLD }} 90'
+
+  test-commerce:
+    name: 🧪 Commerce Service – Build & Test
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.commerce == 'true' ||
+      needs.detect-changes.outputs.shared == 'true' ||
+      needs.detect-changes.outputs.migrations == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - run: dotnet restore src/Services/Commerce/Commerce.API/Commerce.API.csproj
+      - run: dotnet build src/Services/Commerce/Commerce.API/Commerce.API.csproj --no-restore -c Release -warnaserror
+      - run: |
+          dotnet test tests/Commerce.Tests/Commerce.Tests.csproj \
+            --no-build -c Release \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+      - uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: coverage/**/coverage.opencover.xml
+          fail_below_min: true
+          thresholds: '${{ env.COVERAGE_THRESHOLD }} 90'
+
+  test-engagement:
+    name: 🧪 Engagement Service – Build & Test
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.engagement == 'true' ||
+      needs.detect-changes.outputs.shared == 'true' ||
+      needs.detect-changes.outputs.migrations == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - run: dotnet restore src/Services/Engagement/Engagement.API/Engagement.API.csproj
+      - run: dotnet build src/Services/Engagement/Engagement.API/Engagement.API.csproj --no-restore -c Release -warnaserror
+      - run: |
+          dotnet test tests/Engagement.Tests/Engagement.Tests.csproj \
+            --no-build -c Release \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+      - uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: coverage/**/coverage.opencover.xml
+          fail_below_min: true
+          thresholds: '${{ env.COVERAGE_THRESHOLD }} 90'
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 3: Code format check (dotnet format)
+  # ─────────────────────────────────────────────────────────────────────────
+  format-check:
+    name: 🎨 Code Format Check
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_service == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Restore
+        run: dotnet restore billing-backend.sln
+      - name: Check formatting
+        run: |
+          dotnet format billing-backend.sln \
+            --verify-no-changes \
+            --report /tmp/format-report.json \
+            --severity warn
+      - name: Upload format report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: format-report
+          path: /tmp/format-report.json
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 4: Security scan with CodeQL
+  # ─────────────────────────────────────────────────────────────────────────
+  security-scan:
+    name: 🔐 Security Scan (CodeQL)
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_service == 'true'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          queries: security-extended
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - run: dotnet build billing-backend.sln --configuration Release
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:csharp'
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 5: Validate database migrations against a fresh PostgreSQL instance
+  # ─────────────────────────────────────────────────────────────────────────
+  validate-migrations:
+    name: 🗄️ Validate Database Migrations
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.migrations == 'true' ||
+      needs.detect-changes.outputs.any_service == 'true'
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: billing_db_test
+          POSTGRES_USER: billing_user
+          POSTGRES_PASSWORD: test_password_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ConnectionStrings__DefaultConnection: >-
+        Host=localhost;Port=5432;Database=billing_db_test;
+        Username=billing_user;Password=test_password_ci;SSL Mode=Disable
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Build DatabaseMigrator
+        run: |
+          dotnet build src/Migrations/DatabaseMigrator/DatabaseMigrator.csproj \
+            --configuration Release
+
+      - name: Run migrations against fresh database
+        run: |
+          dotnet run \
+            --project src/Migrations/DatabaseMigrator/DatabaseMigrator.csproj \
+            --configuration Release \
+            --no-build
+        timeout-minutes: 10
+
+      - name: Verify migration idempotency (run again)
+        run: |
+          dotnet run \
+            --project src/Migrations/DatabaseMigrator/DatabaseMigrator.csproj \
+            --configuration Release \
+            --no-build
+        timeout-minutes: 10
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 6: Final gate — all required jobs must pass
+  # ─────────────────────────────────────────────────────────────────────────
+  ci-gate:
+    name: ✅ CI Gate (All checks passed)
+    runs-on: ubuntu-latest
+    needs:
+      - detect-changes
+      - format-check
+      - security-scan
+      - validate-migrations
+    # This job always runs to provide a single required status check
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          echo "detect-changes: ${{ needs.detect-changes.result }}"
+          echo "format-check:   ${{ needs.format-check.result }}"
+          echo "security-scan:  ${{ needs.security-scan.result }}"
+          echo "migrations:     ${{ needs.validate-migrations.result }}"
+
+          # Fail if any required job failed (skipped is OK if path didn't change)
+          if [[ "${{ needs.format-check.result }}"       == "failure" || \
+                "${{ needs.security-scan.result }}"      == "failure" || \
+                "${{ needs.validate-migrations.result }}" == "failure" ]]; then
+            echo "❌ One or more CI checks failed"
+            exit 1
+          fi
+
+          echo "✅ All CI checks passed"

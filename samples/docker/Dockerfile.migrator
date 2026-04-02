@@ -1,0 +1,98 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dockerfile.migrator
+#
+# Dockerfile for the DatabaseMigrator project.
+# This image runs as a Kubernetes Job before each service deployment.
+#
+# The migrator:
+#   1. Connects to PostgreSQL (with retry/backoff)
+#   2. Runs EF Core migrations (schema changes: tables, indexes, FKs)
+#   3. Runs DbUp versioned scripts (V*.sql — run once)
+#   4. Runs DbUp re-runnable scripts (R*.sql — run every deploy)
+#   5. Exits 0 on success, 1 on failure
+#
+# The K8s Deployment uses an initContainer waiting for exit 0 before
+# starting the main service container.
+#
+# Build command:
+#   docker build \
+#     -t billing-migrator:latest \
+#     -f samples/docker/Dockerfile.migrator \
+#     .
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1: Build
+# ─────────────────────────────────────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build
+
+WORKDIR /src
+
+# Copy solution and project files for restore (layer caching)
+COPY *.sln ./
+COPY src/Shared/Billing.Shared/*.csproj ./src/Shared/Billing.Shared/
+COPY src/Migrations/DatabaseMigrator/*.csproj ./src/Migrations/DatabaseMigrator/
+
+# Restore NuGet packages
+RUN dotnet restore src/Migrations/DatabaseMigrator/DatabaseMigrator.csproj
+
+# Copy source code
+COPY src/Shared/Billing.Shared/ ./src/Shared/Billing.Shared/
+COPY src/Migrations/DatabaseMigrator/ ./src/Migrations/DatabaseMigrator/
+
+# Publish migrator
+RUN dotnet publish src/Migrations/DatabaseMigrator/DatabaseMigrator.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish \
+    /p:UseAppHost=false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2: Runtime
+# Uses full SDK image for EF Core tooling, or just the runtime if not needed
+# ─────────────────────────────────────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS runtime
+
+# Security: non-root user
+RUN addgroup -S migrator && adduser -S migrator -G migrator -u 1001
+
+# Runtime dependencies
+RUN apk add --no-cache \
+    icu-libs \
+    tzdata \
+    postgresql-client \     
+    && rm -rf /var/cache/apk/*
+
+# postgresql-client provides pg_isready for connection checks
+# (optional — the migrator does its own retry logic)
+
+ENV TZ=Asia/Kolkata
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+ENV DOTNET_RUNNING_IN_CONTAINER=true
+
+# Migration-specific environment
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV Logging__Console__FormatterName=json
+ENV DatabaseMigrator__MaxRetries=10
+ENV DatabaseMigrator__RetryDelaySeconds=5
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+# Copy SQL scripts into the image
+# (alternatively mount them as a K8s ConfigMap)
+COPY src/Migrations/DatabaseMigrator/Scripts/ ./Scripts/
+
+RUN chown -R migrator:migrator /app
+
+USER migrator
+
+# ── Labels ────────────────────────────────────────────────────────────────────
+LABEL org.opencontainers.image.title="billing-migrator" \
+      org.opencontainers.image.description="Database migration runner for billing software" \
+      org.opencontainers.image.vendor="Billing Software"
+
+# Migrator is a console app, not a web server
+# Exit code 0 = success, non-zero = failure (K8s Job handles this)
+ENTRYPOINT ["dotnet", "DatabaseMigrator.dll"]

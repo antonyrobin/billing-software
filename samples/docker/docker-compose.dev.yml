@@ -1,0 +1,242 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.dev.yml
+#
+# Local Development Environment
+#
+# Starts all infrastructure dependencies for local development:
+#   • PostgreSQL 16  — primary database
+#   • Redis 7        — caching and sessions
+#   • RabbitMQ 3     — message bus
+#   • MinIO          — local S3-compatible object storage
+#   • MailHog        — local email testing (catch-all SMTP)
+#   • Adminer        — PostgreSQL web UI
+#   • RedisInsight    — Redis web UI
+#
+# Usage:
+#   docker compose -f samples/docker/docker-compose.dev.yml up -d
+#
+# Services run on the same network (billing-dev).
+# Applications connect using service names as hostnames.
+#
+# Connection strings for appsettings.Development.json:
+#   PostgreSQL: Host=localhost;Port=5432;Database=billing_db;Username=billing_dev;Password=dev_password
+#   Redis:      localhost:6379
+#   RabbitMQ:   amqp://billing_dev:dev_password@localhost:5672
+#   MinIO:      http://localhost:9000 (access: minioadmin / minioadmin)
+#   SMTP:       localhost:1025 (MailHog)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # PostgreSQL 16
+  # ─────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: billing-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       billing_db
+      POSTGRES_USER:     billing_dev
+      POSTGRES_PASSWORD: dev_password
+      # Performance tuning for development (not production values)
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      # Persist data across container restarts
+      - postgres_data:/var/lib/postgresql/data
+      # Auto-run initialization scripts on first start
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Expose on localhost only (not 0.0.0.0 for security)
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U billing_dev -d billing_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - billing-dev
+    # Development-optimized PostgreSQL settings
+    command: >
+      postgres
+      -c log_statement=all
+      -c log_min_duration_statement=100
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c work_mem=16MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=100
+      -c wal_level=logical
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Redis 7 (Standalone — no cluster needed for dev)
+  # ─────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: billing-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass dev_password
+      --loglevel verbose
+      --databases 16
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "dev_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - billing-dev
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # RabbitMQ 3 with Management UI
+  # ─────────────────────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: billing-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER:     billing_dev
+      RABBITMQ_DEFAULT_PASS:     dev_password
+      RABBITMQ_DEFAULT_VHOST:    billing
+      # Enable heartbeat for detecting dead connections
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit heartbeat 60"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "127.0.0.1:5672:5672"    # AMQP protocol
+      - "127.0.0.1:15672:15672"  # Management UI → http://localhost:15672
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - billing-dev
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # MinIO — S3-compatible object storage for local development
+  # Use instead of AWS S3 / Azure Blob during development
+  # ─────────────────────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: billing-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER:     minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    ports:
+      - "127.0.0.1:9000:9000"   # S3 API → http://localhost:9000
+      - "127.0.0.1:9001:9001"   # Console UI → http://localhost:9001
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - billing-dev
+
+  # MinIO initialization: Create default buckets on first start
+  minio-init:
+    image: minio/mc:latest
+    container_name: billing-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        /usr/bin/mc alias set billing http://minio:9000 minioadmin minioadmin;
+        /usr/bin/mc mb --ignore-existing billing/billing-files;
+        /usr/bin/mc mb --ignore-existing billing/billing-invoices;
+        /usr/bin/mc mb --ignore-existing billing/billing-temp;
+        /usr/bin/mc anonymous set download billing/billing-files/public;
+        echo 'MinIO buckets initialized';
+      "
+    networks:
+      - billing-dev
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # MailHog — Catch-all SMTP server for local email testing
+  # All emails sent to any address are captured and visible in the web UI
+  # ─────────────────────────────────────────────────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: billing-mailhog
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"   # SMTP server
+      - "127.0.0.1:8025:8025"   # Web UI → http://localhost:8025
+    networks:
+      - billing-dev
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Adminer — Lightweight PostgreSQL/MySQL web UI
+  # A lightweight alternative to pgAdmin
+  # ─────────────────────────────────────────────────────────────────────────
+  adminer:
+    image: adminer:latest
+    container_name: billing-adminer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"   # Web UI → http://localhost:8080
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: pepa-linha  # Clean theme
+    networks:
+      - billing-dev
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # RedisInsight — Redis web GUI
+  # ─────────────────────────────────────────────────────────────────────────
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: billing-redis-insight
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5540:5540"  # Web UI → http://localhost:5540
+    volumes:
+      - redis_insight_data:/data
+    networks:
+      - billing-dev
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Volumes: Named volumes for data persistence
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: billing-postgres-data
+  redis_data:
+    name: billing-redis-data
+  rabbitmq_data:
+    name: billing-rabbitmq-data
+  minio_data:
+    name: billing-minio-data
+  redis_insight_data:
+    name: billing-redis-insight-data
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Networks: Isolated bridge network for all dev services
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  billing-dev:
+    name: billing-dev
+    driver: bridge

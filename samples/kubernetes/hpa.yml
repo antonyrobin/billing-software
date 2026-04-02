@@ -1,0 +1,317 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# hpa.yml
+#
+# Horizontal Pod Autoscaler configurations for all billing services
+#
+# Scaling triggers:
+#   • CPU utilization (standard K8s metric)
+#   • Memory utilization (requires metrics-server)
+#   • Custom metric: RabbitMQ queue depth (requires KEDA for Engagement Service)
+#
+# Scale-down has a longer stabilization window to avoid flapping
+# (rapidly scaling up and down under variable load).
+#
+# Prerequisites:
+#   kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+#
+# For KEDA (Engagement queue-based scaling):
+#   kubectl apply -f https://github.com/kedacore/keda/releases/download/v2.13.0/keda-2.13.0.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# API Gateway (YARP) — moderate scaling, fast response
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: billing-gateway-hpa
+  namespace: billing-prod
+  labels:
+    app: billing-gateway
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: billing-gateway
+
+  minReplicas: 2    # Always 2 for HA (never single point of failure)
+  maxReplicas: 10
+
+  metrics:
+    # Scale on CPU (primary trigger for gateway — mostly CPU-bound)
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50   # Scale up when avg CPU > 50%
+
+    # Scale on memory (secondary trigger)
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30    # Don't wait long to scale up
+      policies:
+        - type: Pods
+          value: 2            # Add 2 pods at a time
+          periodSeconds: 30   # At most once every 30s
+    scaleDown:
+      stabilizationWindowSeconds: 300   # Wait 5 min before scaling down
+      policies:
+        - type: Pods
+          value: 1            # Remove 1 pod at a time
+          periodSeconds: 60   # At most once per minute
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Identity Service — conservative scaling (auth is critical)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: billing-identity-hpa
+  namespace: billing-prod
+  labels:
+    app: billing-identity
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: billing-identity
+
+  minReplicas: 2    # Always 2 (auth must be highly available)
+  maxReplicas: 10
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70   # Allow higher CPU before scaling (JWT ops are bursty)
+
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120   # Slower scale-down (avoid auth disruption)
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Catalog Service — aggressive scaling (high read traffic for product browsing)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: billing-catalog-hpa
+  namespace: billing-prod
+  labels:
+    app: billing-catalog
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: billing-catalog
+
+  minReplicas: 2
+  maxReplicas: 20    # High max — product browsing can spike (sales, festivals)
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60   # Proactive — scale before it gets too hot
+
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 3           # Add 3 pods at once (anticipate demand spikes)
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Commerce Service — critical path scaling (orders/payments)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: billing-commerce-hpa
+  namespace: billing-prod
+  labels:
+    app: billing-commerce
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: billing-commerce
+
+  minReplicas: 3    # Higher minimum — orders/payments must never fail
+  maxReplicas: 30
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 3
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 600   # 10 min stabilization — very conservative
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Engagement Service — queue-depth based scaling using KEDA
+# Scales based on RabbitMQ queue depth (number of pending messages)
+# This is more accurate than CPU for queue consumers
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Standard HPA for CPU (fallback when KEDA is not installed)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: billing-engagement-hpa
+  namespace: billing-prod
+  labels:
+    app: billing-engagement
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: billing-engagement
+
+  minReplicas: 1    # Can scale to 0 with KEDA (async service, not user-facing)
+  maxReplicas: 10
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+
+---
+# KEDA ScaledObject for queue-based autoscaling of Engagement Service
+# (Requires KEDA operator installed in cluster)
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: billing-engagement-keda
+  namespace: billing-prod
+  labels:
+    app: billing-engagement
+spec:
+  scaleTargetRef:
+    name: billing-engagement
+    kind: Deployment
+
+  minReplicaCount: 0    # Scale to zero when queue is empty (cost saving)
+  maxReplicaCount: 10
+  pollingInterval: 30   # Check queue depth every 30s
+  cooldownPeriod: 300   # Wait 5 min before scaling down to 0
+
+  triggers:
+    # Scale based on RabbitMQ notification queue depth
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: notification-queue
+        mode: QueueLength
+        value: "100"          # 1 pod per 100 messages in queue
+        # If queue has 500 messages → 5 pods
+      authenticationRef:
+        name: billing-rabbitmq-auth
+
+    # Also scale based on email queue
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: email-queue
+        mode: QueueLength
+        value: "50"           # 1 pod per 50 email messages
+      authenticationRef:
+        name: billing-rabbitmq-auth
+
+---
+# KEDA TriggerAuthentication for RabbitMQ credentials
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: billing-rabbitmq-auth
+  namespace: billing-prod
+spec:
+  secretTargetRef:
+    - parameter: host
+      name: billing-rabbitmq-secret
+      key: connection-string
