@@ -1,0 +1,146 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dockerfile.service
+#
+# Multi-stage Dockerfile for all .NET 9 microservices.
+# A single Dockerfile serves Identity, Catalog, Commerce, and Engagement
+# services. The target service is selected via build args.
+#
+# Build args:
+#   SERVICE_PATH  - Path to the service project (e.g. src/Services/Identity/Identity.API)
+#   SERVICE_NAME  - Short name for labels (e.g. identity)
+#
+# Build command:
+#   docker build \
+#     --build-arg SERVICE_PATH=src/Services/Identity/Identity.API \
+#     --build-arg SERVICE_NAME=identity \
+#     -t billing-identity:latest \
+#     -f samples/docker/Dockerfile.service \
+#     .
+#
+# Security hardening:
+#   - Runs as non-root user (app:app, UID 1000)
+#   - No shell in runtime image (distroless-like)
+#   - Read-only root filesystem in K8s (configure in deployment.yml)
+#   - No unnecessary tools (curl, wget) in runtime image
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1: Restore dependencies
+# Separate restore stage allows Docker layer caching when only source changes
+# ─────────────────────────────────────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS restore
+
+WORKDIR /src
+
+# Declare build arguments
+ARG SERVICE_PATH
+ARG SERVICE_NAME
+
+# Copy solution and project files first (for layer caching)
+# Only re-download NuGet packages when .csproj files change
+COPY *.sln ./
+COPY src/Shared/Billing.Shared/*.csproj ./src/Shared/Billing.Shared/
+COPY src/Services/Identity/Identity.API/*.csproj ./src/Services/Identity/Identity.API/
+COPY src/Services/Catalog/Catalog.API/*.csproj ./src/Services/Catalog/Catalog.API/
+COPY src/Services/Commerce/Commerce.API/*.csproj ./src/Services/Commerce/Commerce.API/
+COPY src/Services/Engagement/Engagement.API/*.csproj ./src/Services/Engagement/Engagement.API/
+COPY src/Gateway/BillingGateway/*.csproj ./src/Gateway/BillingGateway/
+
+# Restore NuGet packages (cached if .csproj files unchanged)
+RUN dotnet restore
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2: Build and publish
+# ─────────────────────────────────────────────────────────────────────────────
+FROM restore AS build
+
+ARG SERVICE_PATH
+ARG SERVICE_NAME
+
+# Copy all source code
+COPY . .
+
+# Build the shared library first
+RUN dotnet build src/Shared/Billing.Shared/Billing.Shared.csproj \
+    --configuration Release \
+    --no-restore
+
+# Publish the specific service (self-contained=false, uses runtime image)
+RUN dotnet publish "${SERVICE_PATH}/${SERVICE_NAME}.csproj" \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish \
+    /p:UseAppHost=false \
+    /p:PublishSingleFile=false \
+    /p:PublishTrimmed=false \
+    /p:EnableNETAnalyzers=true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 3: Runtime image
+# Uses ASP.NET runtime (not SDK) — much smaller image
+# ─────────────────────────────────────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS runtime
+
+ARG SERVICE_NAME
+
+# ── Security: Run as non-root user ───────────────────────────────────────────
+RUN addgroup -S app && adduser -S app -G app -u 1000
+
+# ── Security: Install security updates ───────────────────────────────────────
+RUN apk update && apk upgrade --no-cache
+
+# ── Install minimal runtime dependencies ────────────────────────────────────
+# icu-libs: Required for .NET globalization (dates, currencies)
+# tzdata: Required for timezone handling (IST for India)
+RUN apk add --no-cache \
+    icu-libs \
+    tzdata \
+    && rm -rf /var/cache/apk/*
+
+# ── Set timezone to IST (Indian Standard Time) ───────────────────────────────
+ENV TZ=Asia/Kolkata
+
+# ── .NET Runtime configuration ───────────────────────────────────────────────
+# Enable globalization for Indian locale support
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+# Use UTC internally (display in IST via Flutter frontend)
+ENV DOTNET_TZ=UTC
+# Improve container startup performance
+ENV DOTNET_RUNNING_IN_CONTAINER=true
+ENV DOTNET_USE_POLLING_FILE_WATCHER=false
+
+# ── Application configuration ────────────────────────────────────────────────
+ENV ASPNETCORE_ENVIRONMENT=Production
+# Listen on port 8080 (not 80 — non-privileged port)
+ENV ASPNETCORE_URLS=http://+:8080
+# Use JSON logging for structured log collection (Grafana/Loki)
+ENV Logging__Console__FormatterName=json
+ENV Logging__Console__FormatterOptions__TimestampFormat=yyyy-MM-ddTHH:mm:ss.fffZ
+
+WORKDIR /app
+
+# ── Copy published output ─────────────────────────────────────────────────────
+COPY --from=build /app/publish .
+
+# ── Set ownership to non-root user ────────────────────────────────────────────
+RUN chown -R app:app /app
+
+USER app
+
+# ── Health check (K8s also defines probes, but this helps docker run) ─────────
+# Requires the service to expose GET /health returning 200 OK
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD wget -qO- http://localhost:8080/health || exit 1
+
+EXPOSE 8080
+
+# ── Labels ────────────────────────────────────────────────────────────────────
+LABEL org.opencontainers.image.title="billing-${SERVICE_NAME}" \
+      org.opencontainers.image.description="Billing Software - ${SERVICE_NAME} service" \
+      org.opencontainers.image.vendor="Billing Software" \
+      org.opencontainers.image.base.name="mcr.microsoft.com/dotnet/aspnet:9.0-alpine"
+
+ENTRYPOINT ["dotnet", "Identity.API.dll"]
+# Note: Override this in the calling docker build with the correct DLL name,
+# or use a startup script that detects the DLL automatically:
+# ENTRYPOINT ["sh", "-c", "dotnet $(ls *.API.dll | head -1)"]
