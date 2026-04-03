@@ -94,24 +94,22 @@
 
     <form onsubmit="handleLogin(event)">
       <div class="form-group">
-        <label for="loginEmail">Email Address</label>
-        <input type="email" id="loginEmail" placeholder="you@example.com" value="admin@billflow.com">
+        <label for="loginEmail">Email Address or Mobile Number</label>
+        <input type="text" id="loginEmail" placeholder="you@example.com or mobile" value="admin@billflow.com">
       </div>
-      <div class="form-group">
-        <label for="loginPassword">Password</label>
-        <div class="password-wrapper">
-          <input type="password" id="loginPassword" placeholder="Enter your password" value="demo1234">
-          <button type="button" class="password-toggle" onclick="togglePassword('loginPassword', this)"><i class='bx bx-hide'></i></button>
-        </div>
+      <div class="form-group" id="loginOtpGroup" style="display: none;">
+        <label for="loginOtp">Enter 6-digit OTP Code</label>
+        <input type="text" id="loginOtp" placeholder="0 0 0 0 0 0" style="letter-spacing: 5px; text-align: center; font-size: 1.15rem; font-weight: bold;" maxlength="6">
+        <div style="font-size: .8rem; color: var(--text-muted); text-align: right; margin-top: 6px;"><a href="#" onclick="return false;" style="color:var(--primary)">Resend Code</a></div>
       </div>
-      <div class="form-footer">
+      <div class="form-footer" id="loginFooter">
         <div class="form-check">
           <input type="checkbox" id="remember" checked>
-          <label for="remember">Remember me</label>
+          <label for="remember">Remember me on this device</label>
         </div>
-        <button type="button" class="link-btn" onclick="showForm('forgotForm')">Forgot password?</button>
       </div>
-      <button type="submit" class="btn btn-primary"><i class='bx bx-log-in'></i> Sign In</button>
+      <button type="button" class="btn btn-primary" id="btnGetCode" onclick="requestOtp('login')"><i class='bx bx-envelope'></i> Send OTP Code</button>
+      <button type="submit" class="btn btn-primary" id="btnVerifyCode" style="display: none;"><i class='bx bx-check-shield'></i> Verify & Sign In</button>
     </form>
 
     <div class="divider">Quick Demo Access</div>
@@ -130,6 +128,21 @@
         <i class='bx bx-user'></i>
         <span>Customer</span>
         <small>Buyer access</small>
+      </div>
+      <div class="demo-role" onclick="demoLogin('waiter')">
+        <i class='bx bx-restaurant'></i>
+        <span>Waiter</span>
+        <small>Restaurant</small>
+      </div>
+      <div class="demo-role" onclick="demoLogin('kitchen')">
+        <i class='bx bx-food-menu'></i>
+        <span>Kitchen</span>
+        <small>KDS access</small>
+      </div>
+      <div class="demo-role" onclick="demoLogin('delivery')">
+        <i class='bx bx-cycling'></i>
+        <span>Driver</span>
+        <small>Delivery Run</small>
       </div>
     </div>
 
@@ -167,20 +180,19 @@
         <select id="regRole">
           <option value="customer">Customer</option>
           <option value="provider">Service Provider</option>
+          <option value="delivery">Delivery Partner</option>
         </select>
       </div>
-      <div class="form-group">
-        <label for="regPassword">Password</label>
-        <div class="password-wrapper">
-          <input type="password" id="regPassword" placeholder="Min 8 characters">
-          <button type="button" class="password-toggle" onclick="togglePassword('regPassword', this)"><i class='bx bx-hide'></i></button>
-        </div>
+      <div class="form-group" id="regOtpGroup" style="display: none;">
+        <label for="regOtp">Verify mobile with OTP</label>
+        <input type="text" id="regOtp" placeholder="0 0 0 0 0 0" style="letter-spacing: 5px; text-align: center; font-size: 1.15rem; font-weight: bold;" maxlength="6">
       </div>
       <div class="form-check">
         <input type="checkbox" id="terms" checked>
         <label for="terms">I agree to the <a href="#" style="color:var(--primary)">Terms & Conditions</a></label>
       </div>
-      <button type="submit" class="btn btn-primary"><i class='bx bx-user-plus'></i> Create Account</button>
+      <button type="button" class="btn btn-primary" id="btnRegGetCode" onclick="requestOtp('register')"><i class='bx bx-envelope'></i> Verify & Create</button>
+      <button type="submit" class="btn btn-primary" id="btnRegVerifyCode" style="display: none;"><i class='bx bx-user-plus'></i> Complete Registration</button>
     </form>
 
     <div class="auth-footer">
@@ -212,22 +224,42 @@
   function showForm(formId) {
     document.querySelectorAll('.auth-card').forEach(f => f.classList.add('hidden'));
     document.getElementById(formId).classList.remove('hidden');
+    // Reset OTP states
+    document.getElementById('loginOtpGroup').style.display = 'none';
+    document.getElementById('btnGetCode').style.display = 'inline-flex';
+    document.getElementById('btnVerifyCode').style.display = 'none';
+    document.getElementById('loginFooter').style.display = 'flex';
   }
 
-  function togglePassword(inputId, btn) {
-    const input = document.getElementById(inputId);
-    const icon = btn.querySelector('i');
-    if (input.type === 'password') {
-      input.type = 'text';
-      icon.className = 'bx bx-show';
+  function requestOtp(type) {
+    if (type === 'login') {
+      document.getElementById('btnGetCode').innerHTML = '<i class="bx bx-loader-alt bx-spin"></i> Sending...';
+      setTimeout(() => {
+        document.getElementById('loginOtpGroup').style.display = 'block';
+        document.getElementById('btnGetCode').style.display = 'none';
+        document.getElementById('btnVerifyCode').style.display = 'inline-flex';
+        document.getElementById('loginFooter').style.display = 'none';
+        document.getElementById('loginOtp').focus();
+      }, 800);
     } else {
-      input.type = 'password';
-      icon.className = 'bx bx-hide';
+      document.getElementById('btnRegGetCode').innerHTML = '<i class="bx bx-loader-alt bx-spin"></i> Sending...';
+      setTimeout(() => {
+        document.getElementById('regOtpGroup').style.display = 'block';
+        document.getElementById('btnRegGetCode').style.display = 'none';
+        document.getElementById('btnRegVerifyCode').style.display = 'inline-flex';
+        document.getElementById('regOtp').focus();
+      }, 800);
     }
   }
 
   function handleLogin(e) {
     e.preventDefault();
+    const otp = document.getElementById('loginOtp').value;
+    if (otp.length < 6 && otp.length > 0) {
+      document.getElementById('loginError').innerText = "Please enter a valid 6-digit OTP.";
+      document.getElementById('loginError').style.display = 'block';
+      return;
+    }
     const successEl = document.getElementById('loginSuccess');
     successEl.style.display = 'block';
     document.getElementById('loginError').style.display = 'none';
@@ -237,20 +269,21 @@
   function handleRegister(e) {
     e.preventDefault();
     const role = document.getElementById('regRole').value;
-    const route = role === 'provider' ? 'provider-dashboard' : 'customer-home';
+    const route = role === 'provider' ? 'provider-dashboard' : (role === 'delivery' ? 'delivery-runs' : 'customer-home');
     localStorage.setItem('billflow_role', role);
     window.location.href = 'app.html#' + route;
   }
 
-  function handleForgot(e) {
-    e.preventDefault();
-    document.getElementById('resetSuccess').style.display = 'block';
-    setTimeout(() => showForm('loginForm'), 2000);
-  }
-
   function demoLogin(role) {
     localStorage.setItem('billflow_role', role);
-    const routes = { admin: 'admin-dashboard', provider: 'provider-dashboard', customer: 'customer-home' };
+    const routes = { 
+      admin: 'admin-dashboard', 
+      provider: 'provider-dashboard', 
+      customer: 'customer-home',
+      waiter: 'waiter-pos',
+      kitchen: 'kitchen-kds',
+      delivery: 'delivery-runs'
+    };
     window.location.href = 'app.html#' + routes[role];
   }
 </script>

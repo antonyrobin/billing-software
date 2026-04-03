@@ -196,6 +196,10 @@ The original 20-microservice design was optimal for a large team with dedicated 
 │  │ Returns  │  │              Charges Module               │    │
 │  │  Module  │  │        (Packing, Shipping, Handling)      │    │
 │  └──────────┘  └──────────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │           Restaurant & Marketplace Module               │   │
+│  │       (KDS, Tables, Waiters, Split-Cart Logic)          │   │
+│  └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
@@ -438,11 +442,17 @@ Storage:
 │        │        │  (YARP)   │      │   Service    │      │  Cache  │
 └───┬────┘        └─────┬─────┘      └──────┬───────┘      └────┬────┘
     │                   │                   │                    │
-    │  POST /auth/login │                   │                    │
+    │  POST /auth/otp/generate              │                    │
+    │  {phone_or_email} │                   │                    │
+    │──────────────────►│                   │  Gen & Send OTP    │
+    │◄──────────────────│◄──────────────────│                    │
+    │                   │                   │                    │
+    │  POST /auth/otp/verify                │                    │
+    │  {code}           │                   │                    │
     │──────────────────►│                   │                    │
     │                   │  Forward request  │                    │
     │                   │──────────────────►│                    │
-    │                   │                   │ Validate creds     │
+    │                   │                   │ Validate OTP       │
     │                   │                   │ Load tenant+user   │
     │                   │                   │ Load roles+perms   │
     │                   │                   │                    │
@@ -1584,6 +1594,32 @@ Deploy to production:
   → Same process as staging
   → Automatically rolls back if Job fails
 ```
+
+---
+
+## 21. Security & End-to-End Encryption Strategy
+
+### Data Privacy & E2EE
+
+To meet stringent security requirements, the platform adopts an **Encryption at Rest and in Transit** model, explicitly coupled with **Field-Level Encryption (FLE)** and Application-Level Crypto for sensitive Personally Identifiable Information (PII).
+
+1. **At-Rest (Database Level):**
+   - Disks supporting PostgreSQL are encrypted via cloud-provider Key Management Systems (KMS).
+   - Sensitive columns (e.g., precise customer street addresses, raw phone numbers) are encrypted using Advanced Encryption Standard (AES-256-GCM) *before* being written to the database. Application code explicitly decrypts fields upon retrieval in authorized contexts.
+
+2. **In-Transit:**
+   - All external endpoints terminate TLS 1.3 at Cloudflare and YARP.
+   - All internal service-to-service communication is encrypted via mutual TLS (mTLS) inside the Kubernetes cluster.
+
+3. **Privacy Masking & Logistics Proxying:**
+   - **Delivery Persons** and **Third-Party Logistics (3PL)** do NOT receive raw customer phone numbers.
+   - The Engagement Service spins up ephemeral mapped phone extensions (or purely in-app WebRTC channels). When a delivery driver hits "Call Customer" in the UI, the call routes through the proxy, bridging the driver and customer while keeping both real numbers hidden.
+
+### Passwordless & 2FA Flow
+
+1. **No Password Storage:** The database intentionally lacks `password_hash` or `salt` columns. Authentication strictly mandates possession factors (OTP delivered via email or SMS payload).
+2. **2FA Injection:** The `Identity Service` inspects the user's role on successful OTP verification. If their role requires 2FA (e.g., `Admin` or `Provider`), an intermediate token is returned. The user must provide a TOTP (Time-based One-Time Password / Authenticator App output) to exchange the intermediate token for the final JWT Auth/Refresh bundle.
+3. **Session Enforcement:** Standardly managed via Redis revokes blocking JWT paths instantaneously as described in Section 6.
 
 ---
 

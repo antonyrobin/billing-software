@@ -663,7 +663,7 @@ const Pages = {
 
   'admin-general-settings': () => {
     return UI.pageHeader('General Settings', 'Configure system-wide settings')
-      + UI.tabs([{ id: 'general', label: 'General' }, { id: 'billing', label: 'Billing' }, { id: 'tax', label: 'Tax Config' }, { id: 'delivery', label: 'Delivery' }, { id: 'security', label: 'Security' }], 'general')
+      + UI.tabs([{ id: 'general', label: 'General' }, { id: 'billing', label: 'Billing' }, { id: 'restaurant', label: 'Restaurant' }, { id: 'security', label: 'Security & Auth' }], 'general')
       + `<div class="card"><div class="card-body">
           <div class="settings-section">
             <h3>General</h3>
@@ -675,18 +675,16 @@ const Pages = {
             ${UI.settingsItem('Maintenance Mode', 'Take the system offline for maintenance', UI.toggle('maint', false))}
           </div>
           <div class="settings-section">
-            <h3>Invoice Settings</h3>
-            <p>Configure invoice generation rules</p>
-            ${UI.settingsItem('Invoice Prefix', 'Prefix for invoice numbers', '<input class="form-control" style="width:150px" value="INV-">')}
-            ${UI.settingsItem('Auto-Generate Invoice', 'Automatically create invoice on order confirmation', UI.toggle('autoInv', true))}
-            ${UI.settingsItem('Invoice Template', 'Default invoice template', '<select class="form-control" style="width:150px"><option>Modern</option><option>Classic</option><option>Minimal</option></select>')}
-            ${UI.settingsItem('Digital Signature', 'Include digital signature on invoices', UI.toggle('digSig', true))}
+            <h3>Security & Authentication</h3>
+            ${UI.settingsItem('Passwordless Login', 'Enforce OTP/Email codes strictly for all users', UI.toggle('sec1', true))}
+            ${UI.settingsItem('Require 2FA', 'Mandatory 2FA for staff/admins', UI.toggle('sec2', true))}
+            ${UI.settingsItem('E2E Encryption', 'Data-at-rest strict DB encryption for PII', UI.toggle('sec3', true))}
           </div>
           <div class="settings-section">
-            <h3>Stock Settings</h3>
-            ${UI.settingsItem('Low Stock Threshold', 'Default minimum stock level', '<input type="number" class="form-control" style="width:100px" value="20">')}
-            ${UI.settingsItem('Auto Reorder', 'Automatically generate PO when stock is low', UI.toggle('autoReorder', false))}
-            ${UI.settingsItem('Expiry Alert Days', 'Days before expiry to send alert', '<input type="number" class="form-control" style="width:100px" value="30">')}
+            <h3>Restaurant Configuration</h3>
+            ${UI.settingsItem('Dine-In Enabled', 'Allow table reservations and waiter ordering', UI.toggle('rest1', true))}
+            ${UI.settingsItem('KDS Active', 'Route food orders directly to kitchen displays', UI.toggle('rest2', true))}
+            ${UI.settingsItem('Split Cart Orders', 'Marketplace segregated routing for multiple providers', UI.toggle('rest3', false))}
           </div>
           <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.5rem">
             <button class="btn btn-secondary">Reset to Default</button>
@@ -710,11 +708,11 @@ const Pages = {
         </div></div>`
       + `<div class="mt-3">${UI.card('Roles & Permissions', `
           <div class="grid-3">
-            ${['Admin', 'Manager', 'Cashier', 'Inventory Staff', 'Service Provider', 'Customer'].map(role => `
+            ${['Admin', 'Shop Owner', 'Inventory Staff', 'Kitchen Staff', 'Waiter', 'Delivery Driver', 'Delivery Head', 'Support', 'Customer'].map(role => `
               <div class="card" style="cursor:pointer">
                 <div class="card-body">
                   <h4 style="font-size:.95rem;margin-bottom:.5rem">${role}</h4>
-                  <p class="text-muted" style="font-size:.8rem">${role === 'Admin' ? 'Full system access' : role === 'Manager' ? 'Orders, inventory, reports' : role === 'Cashier' ? 'POS, billing only' : 'Limited access'}</p>
+                  <p class="text-muted" style="font-size:.8rem">System defined access and 2FA conditions</p>
                   <button class="btn btn-sm btn-ghost mt-1"><i class='bx bx-edit'></i> Edit Permissions</button>
                 </div>
               </div>
@@ -1440,6 +1438,76 @@ const Pages = {
           <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.5rem">
             <button class="btn btn-primary" onclick="App.showToast('Settings saved!','success')"><i class='bx bx-check'></i> Save Changes</button>
           </div>
+        </div></div>`;
+  },
+
+  'waiter-pos': () => {
+    return UI.pageHeader('Waiter Dashboard', 'Manage Tables & Orders')
+      + `<div class="grid-4 mb-3">
+          ${[1, 2, 3, 4, 5, 6, 7, 8].map(t => {
+            const isOccupied = t % 3 === 0;
+            return `
+            <div class="card" style="border-left: 4px solid ${isOccupied ? 'var(--danger)' : 'var(--success)'}">
+              <div class="card-body" style="text-align:center">
+                <h3 style="margin-bottom:0.5rem">Table ${t}</h3>
+                <span class="badge ${isOccupied ? 'badge-danger' : 'badge-success'}">${isOccupied ? 'Occupied' : 'Open'}</span>
+                
+                ${isOccupied ? `
+                  <div style="margin-top:0.5rem;font-weight:bold;margin-bottom:1rem">${MockData.formatCurrency(Math.floor(Math.random()*1500 + 300))}</div>
+                  <div style="display:flex; flex-direction:column; gap:0.5rem">
+                    <button class="btn btn-sm btn-primary" onclick="App.showToast('Opening menu to add items...')"><i class="bx bx-plus"></i> Add Items</button>
+                    <button class="btn btn-sm btn-secondary" onclick="App.showToast('Checking complete order status...')"><i class="bx bx-time"></i> Check Status</button>
+                    <button class="btn btn-sm btn-success" onclick="App.showToast('Generating final bill and routing to cashier...')"><i class="bx bx-receipt"></i> Generate Bill</button>
+                  </div>
+                ` : `
+                  <div style="margin-top:1.5rem">
+                    <button class="btn btn-sm btn-primary" onclick="App.showToast('Table assigned to guests.')"><i class="bx bx-user-plus"></i> Occupy Table</button>
+                  </div>
+                `}
+              </div>
+            </div>
+          `}).join('')}
+        </div>`;
+  },
+  
+  'kitchen-kds': () => {
+    return UI.pageHeader('Kitchen Display System', 'Active Prep Queue')
+      + `<div class="grid-3">
+          ${[1, 2, 3].map(o => `
+            <div class="card mb-2" style="border-top: 4px solid ${o === 1 ? 'var(--danger)' : 'var(--warning)'}">
+              <div class="card-body">
+                <div class="flex-between mb-2">
+                  <h3 style="margin:0">Order #${1020 + o}</h3>
+                  <span class="text-muted">${o * 5} mins ago</span>
+                </div>
+                <div style="font-size:1.1rem; font-weight:bold; margin-bottom:1rem">Table ${o + 2}</div>
+                <ul style="list-style:none; padding:0; margin-bottom:1.5rem">
+                  <li style="padding:0.5rem 0; border-bottom:1px solid var(--border)">2x Butter Chicken</li>
+                  <li style="padding:0.5rem 0; border-bottom:1px solid var(--border)">4x Garlic Naan</li>
+                  <li style="padding:0.5rem 0; color:var(--danger)">1x Paneer Tikka (No Onion)</li>
+                </ul>
+                <div style="display:flex; gap:0.5rem">
+                  ${o === 3 ? `<button class="btn btn-sm btn-secondary" style="flex:1" onclick="App.showToast('Kitchen has accepted the order')"><i class="bx bx-check-square"></i> Taken</button>` : ''}
+                  ${o === 2 ? `<button class="btn btn-sm btn-warning" style="flex:1" onclick="App.showToast('Order is in preparation')"><i class="bx bx-flame"></i> Prep</button>` : ''}
+                  <button class="btn btn-sm ${o === 1 ? 'btn-danger' : 'btn-success'}" style="flex:1" onclick="App.showToast('Order marked as ready to serve!')"><i class="bx bx-check"></i> Ready</button>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>`;
+  },
+
+  'delivery-runs': () => {
+    return UI.pageHeader('Delivery Dashboard', 'Active Delivery Runs')
+      + `<div class="card"><div class="card-body" style="padding:0">
+          ${UI.dataTable([
+            { label: 'Order', render: r => `<span class="fw-600">${r.id}</span>` },
+            { label: 'Customer', render: () => 'Contact Masked' },
+            { label: 'Address', render: () => '123 Main St, Appts' },
+            { label: 'Payment', key: 'payment' },
+            { label: 'Status Tracking', render: () => `<select class="form-control form-control-sm" style="width:140px" onchange="App.showToast('Delivery status updated to: ' + this.value)"><option>Assigned</option><option>Picked Up</option><option>On the Way</option><option>Delivered</option></select>` },
+            { label: 'Actions', render: () => `<div class="table-actions"><button class="btn btn-sm btn-primary" title="Call Customer (Proxy Masked)"><i class="bx bx-phone-call"></i> Call</button> <button class="btn btn-sm btn-info" title="Open Map Routing"><i class="bx bx-map"></i> Map</button></div>` }
+          ], MockData.orders.slice(0, 3))}
         </div></div>`;
   }
 };

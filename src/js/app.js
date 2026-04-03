@@ -75,6 +75,18 @@ const App = {
       { id: 'provider-reviews', icon: 'bx-star', label: 'Reviews' },
       { id: 'provider-support', icon: 'bx-support', label: 'Support' },
       { id: 'provider-settings', icon: 'bx-cog', label: 'Settings' }
+    ],
+    waiter: [
+      { section: 'Restaurant' },
+      { id: 'waiter-pos', icon: 'bx-restaurant', label: 'Table Management' }
+    ],
+    kitchen: [
+      { section: 'Kitchen' },
+      { id: 'kitchen-kds', icon: 'bx-food-menu', label: 'Prep Queue' }
+    ],
+    delivery: [
+      { section: 'Logistics' },
+      { id: 'delivery-runs', icon: 'bx-cycling', label: 'Active Delivery Runs' }
     ]
   },
 
@@ -100,6 +112,15 @@ const App = {
       { id: 'provider-products', icon: 'bx-package', label: 'Products' },
       { id: 'provider-earnings', icon: 'bx-wallet', label: 'Earnings' },
       { id: 'provider-settings', icon: 'bx-cog', label: 'Settings' }
+    ],
+    waiter: [
+      { id: 'waiter-pos', icon: 'bx-restaurant', label: 'Tables' }
+    ],
+    kitchen: [
+      { id: 'kitchen-kds', icon: 'bx-food-menu', label: 'Kitchen KDS' }
+    ],
+    delivery: [
+      { id: 'delivery-runs', icon: 'bx-cycling', label: 'Deliveries' }
     ]
   },
 
@@ -130,7 +151,7 @@ const App = {
   },
 
   getDefaultPage() {
-    const routes = { admin: 'admin-dashboard', customer: 'customer-home', provider: 'provider-dashboard' };
+    const routes = { admin: 'admin-dashboard', customer: 'customer-home', provider: 'provider-dashboard', waiter: 'waiter-pos', kitchen: 'kitchen-kds', delivery: 'delivery-runs' };
     return routes[this.currentRole] || 'admin-dashboard';
   },
 
@@ -308,7 +329,10 @@ const App = {
       'provider-dashboard': 'Dashboard', 'provider-orders': 'Orders',
       'provider-products': 'Products', 'provider-earnings': 'Earnings',
       'provider-reviews': 'Reviews', 'provider-support': 'Support',
-      'provider-settings': 'Settings'
+      'provider-settings': 'Settings',
+      'waiter-pos': 'Table Management',
+      'kitchen-kds': 'Kitchen Display System',
+      'delivery-runs': 'Active Deliveries'
     };
     return titles[this.currentPage] || 'Page';
   },
@@ -339,7 +363,7 @@ const App = {
   switchRole(role) {
     this.currentRole = role;
     localStorage.setItem('billflow_role', role);
-    const routes = { admin: 'admin-dashboard', customer: 'customer-home', provider: 'provider-dashboard' };
+    const routes = { admin: 'admin-dashboard', customer: 'customer-home', provider: 'provider-dashboard', waiter: 'waiter-pos', kitchen: 'kitchen-kds', delivery: 'delivery-runs' };
     this.navigate(routes[role]);
   },
 
