@@ -223,6 +223,11 @@ Comprehensive item master supporting unlimited categories, types, brands, and pa
 - [ ] Digital items support (e-books, licenses, subscriptions)
 - [ ] Recipe/Bill of Materials (BOM) for manufactured items
 
+#### Shop-Level Configuration
+- **Strict Master Mode:** Only allow selling products already present in the master database. If a product is missing, it must be legally added to the Product Master first.
+- **Partial Master Mode (Ad-hoc Products):** If a product is not in the master, staff can manually type the product name, set a dynamic quantity, assign a price, and process the sale immediately without cluttering the master DB.
+- **No-Master Mode:** The shop maintains zero product master data; all sales are simply entered as ad-hoc generic entries (e.g., "Grocery Item - ₹50") at the billing screen.
+
 ---
 
 ### 2.4 Master Data Management (CRUD Operations)
@@ -317,6 +322,10 @@ Multi-location inventory management with granular tracking down to shelf and rac
 - [ ] Cycle count scheduling
 - [ ] Integration with purchase orders for auto stock-in
 - [ ] Visual warehouse map with stock heatmap
+
+#### Shop-Level Configuration
+- **Strict Inventory Enforcement:** Checkout cannot proceed if the requested quantity exceeds the physical stock recorded in the system.
+- **Bypass Inventory Check:** Allows shops that do not rigorously track physical inventory counts to process orders and sell items even when stock levels are negative or undefined.
 
 ---
 
@@ -505,6 +514,10 @@ Flexible discount system at item level and order level.
 - [ ] Discount templates for quick application
 - [ ] Discount audit trail
 
+#### Shop-Level Configuration (Billing Limits)
+- **Strict Pricing Restrict:** Cashiers cannot change preset item prices or apply spot discounts at the billing screen; pricing strictly driven via master data rules and promos.
+- **Flexible Pricing Allowed:** Cashiers are allowed to modify the final product price and apply ad-hoc item or order-level discounts during checkout (up to a configurable limit/percentage).
+
 ---
 
 ### 2.10 Offers & Promotions
@@ -576,56 +589,41 @@ Comprehensive promotional offers engine supporting multiple offer types.
 
 ---
 
-### 2.11 Customer Sign-Up & Login
+### 2.11 Passwordless Sign-Up & Login
 
 **ID:** FR-011  
 **Priority:** High  
-**Module:** Customer Authentication
+**Module:** Authentication & Security
 
 #### Description
-Simple and secure customer registration and authentication system.
+Highly secure, passwordless authentication utilizing One-Time Passwords (OTP) and configurable Two-Factor Authentication (2FA) coupled with robust JWT session management.
 
 #### Requirements
 
-- **Sign-Up Options:**
-  - Email + Password registration
-  - Mobile number + OTP registration
-  - Social login (Google, Facebook, Apple)
-  - Guest checkout (optional registration)
-  - Walk-in customer quick registration (POS)
+- **Sign-Up & Login (No Passwords Allowed):**
+  - Mobile number + SMS OTP verification.
+  - Email Address + Email Code / Magic Link verification.
+  - Social login (Google, Facebook, Apple).
 
-- **Sign-Up Form:**
-  - Name (First, Last)
-  - Email Address (with verification)
-  - Mobile Number (with OTP verification)
-  - Password (with strength indicator)
-  - Terms & Conditions acceptance
-  - Optional: Date of Birth, Gender, Preferences
+- **Configurable 2FA (Two-Factor Authentication):**
+  - Toggled ON/OFF per role (e.g. required for Admins/Owners, optional for Customers).
+  - Can use Authenticator Apps (TOTP) or backup email/SMS codes.
 
-- **Login Options:**
-  - Email + Password
-  - Mobile + OTP
-  - Social login
-  - Biometric login (Fingerprint, Face ID — mobile)
-  - PIN-based quick login
-  - Remember me option
+- **Session Management & JWT:**
+  - Short-lived Access Tokens (JWT) kept in memory.
+  - Long-lived, rotation-enforced Refresh Tokens stored securely.
+  - End-to-end management of active sessions (forced logout on device level).
 
-- **Security:**
-  - Forgot password with email/SMS reset
-  - Account lockout after N failed attempts
-  - CAPTCHA for bot prevention
-  - Session management (auto-logout after inactivity)
-  - Multi-device login management
+- **Security Details:**
+  - Device/IP tracking for suspicious login alerts.
+  - Account lockout/cooldown on bad OTP attempts.
+  - No plaintext or hashed static passwords stored anywhere.
+  - Bot protection via CAPTCHA.
 
 #### Enhancements
-- [ ] Passwordless authentication (Magic Link)
-- [ ] Two-Factor Authentication (2FA) for customers
-- [ ] Single Sign-On (SSO) for enterprise clients
-- [ ] Progressive profiling (collect info gradually)
-- [ ] Age verification for restricted items (alcohol, tobacco)
-- [ ] GDPR-compliant data consent management
-- [ ] Account deletion / Right to be forgotten
-- [ ] Welcome tutorial / Onboarding flow
+- [ ] Biometric login fallback (FaceID/TouchID on mobile).
+- [ ] Single Sign-On (SSO) for enterprise franchises.
+- [ ] GDPR-compliant data consent records.
 
 ---
 
@@ -785,6 +783,10 @@ Comprehensive payment processing for collections and refunds.
 - [ ] Payment analytics and reporting
 - [ ] Auto-settlement to service providers
 
+#### Shop-Level Configuration
+- **Strict Payment Gateway Mode:** All monetary collections must explicitly go through a digital payment gateway integration via the system. Cashiers cannot bypass to collect physical cash.
+- **Hybrid Payment / Manual Mode:** Shops can accept and manually log direct payments (cash, external card swallows, direct bank transfers) alongside digital PG flows.
+
 ---
 
 ### 2.15 Item Exchange & Returns
@@ -908,6 +910,17 @@ Complete order lifecycle management with visibility for customers.
   - Track delivery in real-time (map view)
   - Download invoice for any order
   - Reorder (one-click add all items to cart)
+
+- **Offline POS Flow (Quick-Billing Screen):**
+  - Add product via search or Barcode scanner.
+  - POS displays total price instantly.
+  - Ask customer for payment method, process payment externally or via integrated gateway.
+  - Mark order as "Paid".
+  - Auto-generate localized tax receipt, send pulse to thermal printer instantly.
+  - Hand over items and printed receipt to customer.
+
+- **Customer Self-Service:**
+  - Dedicated self-checkout UI allowing walk-in customers to browse from the available list of products, form a cart, process digital payments unassisted, and generate their own order token.
 
 #### Enhancements
 - [ ] Order timeline/Activity log
@@ -1624,9 +1637,80 @@ Quick and convenient reorder functionality from previous orders.
 
 ---
 
+### 2.31 Restaurant Management System
+
+**ID:** FR-031  
+**Priority:** High  
+**Module:** Restaurant Operations
+
+#### Description
+Specialized module configured for Food & Beverage businesses handling in-house dining operations and online orders.
+
+#### Requirements
+
+- **Order Routing (3-Ways of Ordering):**
+  - **Dine In:** Associated with specific Tables, serviced by Waiters.
+  - **Take Away:** Quick-billing queue, generic customer name matching.
+  - **Online Order:** Funneled into prep-queue, associated with delivery providers.
+
+- **Dine-In Workflows:**
+  - Table Master (setup layouts, zones/floors, capacities).
+  - Waiter Master (link generic users/logins to waiter assignments).
+  - Customer-Lead Ordering via QR code scanned at table (adds directly to Open Table tab).
+  - Waiter-Lead Ordering (waiter utilizes tablet application to place/modify tab on behalf of customers).
+
+- **Kitchen Operations:**
+  - Kitchen Display System (KDS) for kitchen staff.
+  - Auto-routing of Food items to Kitchen KDS, Beverage items to Bar KDS.
+  - Prep-time tracking, mark as "Ready", auto-alerting back to Waiter/Customer frontend.
+
+---
+
+### 2.32 Multi-Tenant Marketplace & Logistics
+
+**ID:** FR-032  
+**Priority:** High  
+**Module:** Marketplace & Delivery
+
+#### Description
+Facilitates advanced online e-commerce operations involving multi-store discoveries and third-party delivery handling.
+
+#### Requirements
+
+- **Marketplace Cart & Discovery:**
+  - Store-level configuration toggles: Search only within *One Shop* vs. Discover products across *Selected Affiliates* vs. Search *All Platform Shops*.
+  - **Split Cart Setup:** If a customer adds items from different shops to a single cart, checkout generates categorized, segregated child-orders to correctly route provider payouts and distinct deliveries.
+
+- **Delivery Configuration:**
+  - Define authorized Delivery Companies/Agencies.
+  - Define individual Delivery Person masters assigned to orders.
+  - Customizable platform listing charges, third-party delivery dispatch rates, and transit tax.
+
+- **Data Privacy (Masking):**
+  - Customer identity protection. Direct phone numbers or home addresses are restricted or masked.
+  - The delivery person can only communicate/call the customer via proxy tunnels strictly enclosed inside the Delivery App.
+
+---
+
 ## 3. Non-Functional Requirements
 
-### 3.1 Performance
+### 3.1 Security & Access (Roles & Logins)
+
+The system manages 9 primary explicit roles (customizable via RBAC):
+
+1. **Online Customers**: Platform-wide buyers.
+2. **Admin Users**: Global system administrators / Platform owners.
+3. **Support Users**: Helpdesk workers and customer dispute handlers.
+4. **Shop Owners (Providers)**: Master tenants controlling individual stores/business metrics.
+5. **Inventory Staff**: Employees authorized only for stock adjustments and receiving.
+6. **Kitchen Staff**: Specialized access to the Restaurant KDS interfaces.
+7. **Waiter Users**: Employees managing table orders and floor layouts.
+8. **Delivery Head / Company**: Overlords of logistics who review fleet performance and payouts.
+9. **Delivery Drivers**: Logistics fleet users fulfilling active runs and map routing.
+
+*Authentication requires Passwordless OTP (Email/SMS) + Role-dependent 2FA parameters.*
+
+### 3.2 Performance
 - Page load time: < 2 seconds
 - API response time: < 500ms (95th percentile)
 - Support 10,000+ concurrent users
@@ -1634,26 +1718,25 @@ Quick and convenient reorder functionality from previous orders.
 - CDN for static assets
 - Caching strategy (Redis/Memcached)
 
-### 3.2 Scalability
+### 3.3 Scalability
 - Horizontal scaling with load balancers
 - Microservices architecture
 - Database sharding for high-volume data
 - Auto-scaling based on traffic patterns
 - Multi-region deployment support
 
-### 3.3 Security
+### 3.4 Advanced Security & Encryption
+- **End-to-End Encryption (E2EE):** Business-critical and customer PII data must be deeply protected. Data should be encrypted at rest utilizing robust Key Management Systems (KMS) and securely routed via TLS 1.3 in transit. Strict obfuscation measures mask sensitive details from internal delivery drivers.
+- **Authentication:** Purely passwordless (OTP/Magic Links), meaning brute-forcing password digests is completely neutralized by design. Rate-limited and CAPTCHA protected.
 - OWASP Top 10 compliance
-- Data encryption at rest (AES-256) and in transit (TLS 1.3)
-- Role-Based Access Control (RBAC)
-- API rate limiting and throttling
-- SQL injection and XSS prevention
+- Role-Based Access Control (RBAC) securely locked by JSON Web Tokens (JWT) with rigorous invalidation schemas.
+- SQL injection, CSRF and XSS prevention
 - Regular security audits and penetration testing
-- GDPR / Data Privacy compliance
-- PCI DSS compliance for payment handling
-- Session management with secure cookies
-- Audit logging for all sensitive operations
+- GDPR / Data Privacy compliance (opt-out, export functionality)
+- PCI DSS Level 1 compliance for all payment handling (No PAN numbers stored internally)
+- Session management strictly managed via secure cookies and Redis-enforced access blocking.
 
-### 3.4 Availability & Reliability
+### 3.5 Availability & Reliability
 - 99.9% uptime SLA
 - Disaster recovery plan with RTO < 4 hours, RPO < 1 hour
 - Automated backups (daily full, hourly incremental)

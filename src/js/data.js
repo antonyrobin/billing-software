@@ -24,7 +24,10 @@ const MockData = {
   users: {
     admin: { name: 'Antony Robin', email: 'admin@billflow.com', role: 'Admin', avatar: 'AR' },
     provider: { name: 'Raj Kumar', email: 'raj@provider.com', role: 'Service Provider', avatar: 'RK' },
-    customer: { name: 'Priya Sharma', email: 'priya@customer.com', role: 'Customer', avatar: 'PS' }
+    customer: { name: 'Priya Sharma', email: 'priya@customer.com', role: 'Customer', avatar: 'PS' },
+    waiter: { name: 'Ravi Teja', email: 'ravi@restaurant.com', role: 'Waiter', avatar: 'RT' },
+    kitchen: { name: 'Chef Sanjeev', email: 'kitchen@restaurant.com', role: 'Kitchen Staff', avatar: 'CS' },
+    delivery: { name: 'Suresh B', email: 'suresh@delivery.com', role: 'Delivery Driver', avatar: 'SB' }
   },
 
   // --- Categories ---
