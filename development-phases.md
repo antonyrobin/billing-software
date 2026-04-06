@@ -13,13 +13,13 @@ The development is split into **7 phases**. Each phase ends with a fully functio
 
 | Phase | Name | Primary Focus | Duration | Go-Live Target |
 |---|---|---|---|---|
-| **1** | Foundation & MVP | Company setup, Product Master, POS Billing, GST Invoice | 8–10 weeks | Week 10 |
-| **2** | Core Commerce | Inventory, Barcode/QR, Search, Cart, Discounts, Customer Auth | 8–10 weeks | Week 20 |
-| **3** | Payments & Returns | Payment Gateway, Saved Cards, Returns & Exchange | 6–8 weeks | Week 28 |
-| **4** | Engagement | Offers/Promotions, Reviews, Email/SMS/Push Notifications | 6–8 weeks | Week 36 |
+| **1** | Foundation & MVP | Company setup, Product Master, POS Billing, GST Invoice, Import/Export (Masters) | 8–10 weeks | Week 10 |
+| **2** | Core Commerce | Inventory, Barcode/QR, Search, Cart, Discounts, Customer Auth, Procurement & Suppliers | 8–10 weeks | Week 20 |
+| **3** | Payments & Accounts | Payment Gateway, Saved Cards, Returns & Exchange, Accounts & Ledger, Party Settlement | 6–8 weeks | Week 28 |
+| **4** | Engagement | Offers/Promotions, Reviews, Email/SMS/Push Notifications, WhatsApp Bill Sharing, Order Import/Export | 6–8 weeks | Week 36 |
 | **5** | Operations | Service Provider Portal, Delivery, Charges, Block/Service Control | 6–8 weeks | Week 44 |
-| **6** | Intelligence | Dashboards, Reports, AI Assistance, Customer Support | 8–10 weeks | Week 54 |
-| **7** | Growth & Expansion | Welcome Offers, Referrals, Reorder, Restaurant Module, Marketplace | 6–8 weeks | Week 62 |
+| **6** | Intelligence & AI | Dashboards, Reports, AI Suite (RAG, OCR Import, Predictions, Recommendations), Customer Support | 8–10 weeks | Week 54 |
+| **7** | Growth & Expansion | Welcome Offers, Referrals, Reorder, Restaurant Module, Marketplace, Advanced AI | 6–8 weeks | Week 62 |
 
 ---
 
@@ -37,6 +37,7 @@ The development is split into **7 phases**. Each phase ends with a fully functio
 | FR-018 | Bill Receipt & Invoice Generation (basic) | High |
 | FR-021 | GST / VAT Calculation (core engine) | High |
 | FR-011 | Passwordless Sign-Up & Login (admin/owner only) | High |
+| FR-036 | Data Import/Export (masters only) | High |
 
 ### 1.2 Detailed Features
 
@@ -69,6 +70,15 @@ The development is split into **7 phases**. Each phase ends with a fully functio
 - Tax master (tax types and rates)
 - Payment Mode master (Cash, Card, UPI, Net Banking)
 - Common features: pagination, sorting, search, audit trail (created/modified by + timestamps), bulk activate/deactivate/delete, import/export (CSV)
+
+#### Master Data Import/Export (FR-036 — basic)
+- CSV and Excel (.xlsx) import/export for all masters
+- Template download for each entity (pre-formatted with required columns and sample data)
+- Column mapping wizard for imports
+- Validation and row-level error reporting
+- Preview before import (first 10 rows)
+- Duplicate detection (skip / overwrite options)
+- Import history log
 
 #### Authentication — Admin & Owner (FR-011)
 - Mobile OTP login (SMS)
@@ -118,14 +128,17 @@ The development is split into **7 phases**. Each phase ends with a fully functio
 | **Backend** | Tax Engine Service: GST rate resolution, CGST/SGST/IGST calculation |
 | **Backend** | Invoice Service: invoice number generation, PDF rendering |
 | **Backend** | Order Service (POS): create/complete a quick-bill order |
-| **Frontend** | Admin web app: company setup wizard |
-| **Frontend** | Product Master CRUD screens |
-| **Frontend** | Master data management screens (categories, brands, UOM, taxes) |
-| **Frontend** | POS billing screen (quick-bill interface) |
-| **Frontend** | Invoice preview and PDF download |
+| **Backend** | Import/Export Service: CSV/Excel parser, template generation, validation engine |
+| **Frontend (Web)** | Next.js admin web app: company setup wizard |
+| **Frontend (Web)** | Product Master CRUD screens |
+| **Frontend (Web)** | Master data management screens (categories, brands, UOM, taxes) |
+| **Frontend (Web)** | POS billing screen (quick-bill interface) |
+| **Frontend (Web)** | Invoice preview and PDF download |
+| **Frontend (Web)** | Import/Export wizard screens (upload, column mapping, preview, execution) |
+| **Frontend (Mobile)** | Flutter shell app: auth flow, basic navigation |
 | **Database** | Schema: companies, branches, products, categories, taxes, orders, order_items, invoices |
 | **Database** | Indexes on frequently queried columns (product.sku, product.hsn_code) |
-| **Security** | OWASP headers (Helmet.js / Spring Security) |
+| **Security** | OWASP headers (Next.js security headers / .NET middleware) |
 | **Security** | Input validation and SQL-injection prevention |
 | **Security** | Rate limiting on OTP endpoints |
 
@@ -165,6 +178,7 @@ GET    /orders/:id/invoice/pdf
 - Integration tests: Full POS order → invoice generation flow
 - Integration tests: Auth flow (OTP request → verify → JWT → refresh → logout)
 - E2E test: Cashier creates order, marks paid, downloads PDF invoice
+- E2E test: Admin imports products via CSV, verifies in product list
 
 ### 1.6 Deployment Checklist
 
@@ -203,6 +217,7 @@ GET    /orders/:id/invoice/pdf
 | FR-011 | Customer Passwordless Login (extends Phase 1 auth) | High |
 | FR-017 | Order Management (online flow) | High |
 | FR-019 | Delivery Address Management | High |
+| FR-033 | Procurement & Supplier Management | High |
 
 ### 2.2 Detailed Features
 
@@ -229,7 +244,9 @@ GET    /orders/:id/invoice/pdf
 - QR code generation per product (item details, price, batch, expiry, URL)
 - Barcode label designer: multiple sizes (1×1, 2×1, A4 sheet)
 - Thermal printer integration (Zebra/TSC/Brother via ZPL/TSPL)
-- Mobile camera-based scanning (web app via BarcodeDetector API / ZXing)
+- **Mobile App (Flutter):** Native camera-based barcode/QR scanning to add items to cart (using mobile_scanner / google_mlkit_barcode_scanning)
+- **Web App (Next.js):** External USB/Bluetooth barcode scanner support via keyboard wedge mode (scanner types characters into focused input field)
+- Web fallback: BarcodeDetector API for browsers that support it
 
 #### Item Search & Discovery (FR-007)
 - Barcode/QR scan: hardware scanner + mobile camera
@@ -268,6 +285,20 @@ GET    /orders/:id/invoice/pdf
 - Google Maps / Mapbox pin drop for geo-coordinates
 - Max addresses per customer (configurable, default 10)
 
+#### Procurement & Supplier Management (FR-033)
+- Supplier/Manufacturer master: name, type (Supplier/Manufacturer/Both), contact, GSTIN, PAN, bank details
+- Dual-role flag: link supplier to existing customer record (same party buys and sells)
+- Category/product line tagging per supplier, lead time, payment terms
+- Purchase Order (PO): create from ROL auto-trigger or manual, sequential PO number
+- PO items with quantity, rate, discount, GST; PO total with tax breakdown
+- PO approval workflow (auto-approve below configurable threshold)
+- PO status lifecycle: Draft → Sent → Acknowledged → Partially Received → Fully Received → Closed
+- PO PDF generation and send to supplier (email)
+- Goods Received Note (GRN): receive against PO (partial/full), quality check, batch/expiry capture
+- Auto-update inventory on GRN approval
+- Supplier invoice recording against GRN
+- 3-way matching: PO → GRN → Supplier Invoice
+
 ### 2.3 Technical Tasks
 
 | Area | Task |
@@ -279,14 +310,19 @@ GET    /orders/:id/invoice/pdf
 | **Backend** | Cart Service: persistent cart with Redis (session) + PostgreSQL (draft) |
 | **Backend** | Discount Service: rule engine, priority/precedence logic |
 | **Backend** | Order Service: extend POS order with full online order workflow |
-| **Frontend** | Customer registration and profile pages |
-| **Frontend** | Inventory management screens (stock-in, stock-out, transfer, count) |
-| **Frontend** | Barcode/QR label designer and print preview |
-| **Frontend** | Search results page with filters and facets |
-| **Frontend** | Cart page with discount application |
-| **Frontend** | Order history with tracking timeline |
-| **Frontend** | Address book management screens |
-| **Database** | Schema additions: customers, addresses, stock_locations, stock_movements, batches, serials, carts, wishlists, discounts |
+| **Backend** | Procurement Service: supplier master CRUD, PO CRUD, GRN workflow, 3-way matching |
+| **Frontend (Web)** | Customer registration and profile pages |
+| **Frontend (Web)** | Inventory management screens (stock-in, stock-out, transfer, count) |
+| **Frontend (Web)** | Barcode/QR label designer and print preview |
+| **Frontend (Web)** | Search results page with filters and facets |
+| **Frontend (Web)** | Cart page with discount application |
+| **Frontend (Web)** | Order history with tracking timeline |
+| **Frontend (Web)** | Address book management screens |
+| **Frontend (Web)** | Procurement screens: Supplier master, PO creation, GRN entry, PO tracking |
+| **Frontend (Mobile)** | Flutter: barcode/QR scanner with native camera (scan to add to cart) |
+| **Frontend (Mobile)** | Flutter: customer-facing cart, order history, product browse |
+| **Frontend (Mobile)** | Flutter: inventory stock-take with barcode scanner |
+| **Database** | Schema additions: customers, addresses, stock_locations, stock_movements, batches, serials, carts, wishlists, discounts, suppliers, purchase_orders, purchase_order_items, goods_received_notes |
 | **Infrastructure** | ElasticSearch/Meilisearch instance provisioned |
 | **Infrastructure** | WebSocket server for real-time stock updates on POS screen |
 
@@ -298,6 +334,8 @@ GET    /orders/:id/invoice/pdf
 - Integration tests: Stock transaction (in → out → balance reconciliation)
 - Integration tests: Cart add → apply discount → checkout
 - E2E test: Scan barcode → add to cart → apply discount → complete order → stock decremented
+- E2E test (Mobile): Open Flutter app → scan barcode via camera → item added to cart → checkout
+- E2E test: Create PO → send to supplier → receive GRN (partial) → stock updated → supplier invoice matched
 - Performance test: Search API < 500 ms under 500 concurrent queries
 
 ### 2.5 Deployment Checklist
@@ -310,9 +348,9 @@ GET    /orders/:id/invoice/pdf
 
 ---
 
-## Phase 3 — Payments & Returns
+## Phase 3 — Payments & Accounts
 
-> **Goal:** Integrate real payment gateways, enable saved payment methods, and build a robust returns and exchange workflow. Shops can now accept digital payments and handle post-sale operations professionally.
+> **Goal:** Integrate real payment gateways, enable saved payment methods, build a robust returns and exchange workflow, and introduce the accounts & ledger module for advance/pending payments and party settlement. Shops can now accept digital payments, handle post-sale operations, and track financial positions with suppliers and customers.
 
 ### 3.1 Scope
 
@@ -321,6 +359,7 @@ GET    /orders/:id/invoice/pdf
 | FR-014 | Payment Gateway Integration | High |
 | FR-015 | Item Exchange & Returns | High |
 | FR-020 | Payment Options & Card Management | High |
+| FR-034 | Accounts & Ledger — Party Settlement | High |
 
 ### 3.2 Detailed Features
 
@@ -368,6 +407,19 @@ GET    /orders/:id/invoice/pdf
 - Restocking fee configuration
 - Returned items auto-restock to inventory after quality check
 
+#### Accounts & Ledger — Party Settlement (FR-034)
+- Party ledger: unified per-party transaction log (all purchases and sales)
+- Advance payments: record advance given to suppliers and received from customers
+- Advance adjustment against future invoices
+- Pending payments: payable (we owe suppliers) and receivable (customers owe us)
+- Aging analysis: 0–30, 31–60, 61–90, 90+ days buckets
+- Due date alerts via email/SMS/push
+- Payment reminder automation (configurable intervals)
+- Net settlement for dual-role parties: compare total purchased vs. total sold, show net balance
+- Settlement statement PDF generation
+- Reports: "Who Owes Us" list, "Whom We Owe" list, cash flow summary
+- Dashboard charts: top receivables, top payables, aging pie chart
+
 ### 3.3 Technical Tasks
 
 | Area | Task |
@@ -378,13 +430,19 @@ GET    /orders/:id/invoice/pdf
 | **Backend** | Card Token Service: tokenization request/response handling with gateway |
 | **Backend** | Returns Service: return/exchange request workflow, refund trigger |
 | **Backend** | Refund Service: refund to payment method, to wallet, manual approval queue |
-| **Frontend** | Checkout payment screen (gateway SDK integration) |
-| **Frontend** | Saved cards management UI |
-| **Frontend** | Store credit/wallet UI |
-| **Frontend** | Return initiation from order history |
-| **Frontend** | Return tracking status UI |
-| **Frontend** | Exchange flow with price difference handling |
-| **Database** | Schema additions: payments, refunds, returns, exchanges, wallet_transactions, saved_cards (token only) |
+| **Backend** | Accounts Service: party ledger CRUD, advance tracking, pending payment aging, net settlement calculator |
+| **Frontend (Web)** | Checkout payment screen (gateway SDK integration) |
+| **Frontend (Web)** | Saved cards management UI |
+| **Frontend (Web)** | Store credit/wallet UI |
+| **Frontend (Web)** | Return initiation from order history |
+| **Frontend (Web)** | Return tracking status UI |
+| **Frontend (Web)** | Exchange flow with price difference handling |
+| **Frontend (Web)** | Party ledger screen with filters and transaction log |
+| **Frontend (Web)** | Receivables & Payables dashboard with aging charts |
+| **Frontend (Web)** | Net settlement screen for dual-role parties |
+| **Frontend (Mobile)** | Flutter: payment flow, UPI/wallet integration |
+| **Frontend (Mobile)** | Flutter: return initiation, tracking |
+| **Database** | Schema additions: payments, refunds, returns, exchanges, wallet_transactions, saved_cards (token only), party_ledger, advance_payments, pending_payments |
 | **Security** | PCI DSS scope reduction audit — confirm no raw card data in application layer |
 | **Security** | Webhook signature verification for all payment gateways |
 | **Infrastructure** | Razorpay / Stripe test sandbox environment configured |
@@ -396,6 +454,7 @@ GET    /orders/:id/invoice/pdf
 - Integration tests: Razorpay webhook → order status update → refund initiation
 - Integration tests: Card tokenization save → use on checkout
 - E2E test: Complete purchase with UPI → initiate return → receive refund to wallet
+- E2E test: Dual-role party (supplier + customer) → purchase from them + sell to them → net settlement calculates correctly
 - Security test: Confirm no PAN/CVV data in database or logs
 - Load test: 100 concurrent payment initiations with no duplicate charges
 
@@ -421,6 +480,8 @@ GET    /orders/:id/invoice/pdf
 | FR-016 | Reviews & Ratings | Medium |
 | FR-025 | Email & SMS Notifications | High |
 | FR-026 | Push Notifications | High |
+| FR-035 | Bill Sharing (WhatsApp, Email & SMS) | High |
+| FR-036 | Data Import/Export (orders & transactional) | High |
 
 ### 4.2 Detailed Features
 
@@ -462,6 +523,28 @@ GET    /orders/:id/invoice/pdf
 - Broadcast vs. segmented vs. individual targeting
 - Scheduled notifications
 
+#### Bill Sharing — WhatsApp, Email & SMS (FR-035)
+- Auto-share invoice on bill generation to buyer, company owner, and branch manager (configurable per bill type)
+- WhatsApp Business API integration: template messages with PDF attachment, interactive buttons ("View Invoice", "Pay Now")
+- Email sharing with PDF invoice attachment
+- SMS with short link to view/download invoice
+- Per-company toggle: enable/disable per channel (WhatsApp, Email, SMS)
+- Per-recipient toggle: which stakeholder gets which channel
+- Per-bill-type toggle: sales invoice, purchase order, credit note, delivery challan
+- Template customization per channel
+- Delivery status tracking (sent, delivered, read for WhatsApp)
+- Manual re-share from order/invoice screen
+- Bulk share for pending/past invoices
+
+#### Order & Transaction Data Import/Export (FR-036 — extended)
+- Order import: CSV/Excel with validation, column mapping, preview
+- Order export: filtered by date range, status, customer, payment method
+- Invoice export: PDF batch export, Excel summary
+- Payment data export for reconciliation
+- Stock movement import/export
+- Scheduled export: daily/weekly to email or cloud storage
+- API-based export for third-party integrations
+
 ### 4.3 Technical Tasks
 
 | Area | Task |
@@ -474,13 +557,22 @@ GET    /orders/:id/invoice/pdf
 | **Backend** | Email Provider Adapter: SendGrid / AWS SES integration |
 | **Backend** | SMS Provider Adapter: MSG91 / Twilio integration |
 | **Backend** | Push Provider Adapter: FCM / APNs via Firebase Admin SDK |
-| **Frontend** | Coupon/offer management screens (admin) |
-| **Frontend** | Loyalty points dashboard (customer) |
-| **Frontend** | Review submission form and listing on product page |
-| **Frontend** | Review moderation screen (admin) |
-| **Frontend** | Notification preferences page (customer) |
-| **Frontend** | In-app notification center (bell icon, unread badge) |
-| **Database** | Schema additions: coupons, offers, loyalty_points, reviews, ratings, notification_templates, notification_log, push_subscriptions |
+| **Backend** | WhatsApp Service: Business API integration, template management, delivery tracking |
+| **Backend** | Bill Sharing Service: auto-dispatch on invoice events, recipient resolution, channel routing |
+| **Backend** | Import/Export Service (extended): order/transaction import-export, scheduled export jobs |
+| **Frontend (Web)** | Coupon/offer management screens (admin) |
+| **Frontend (Web)** | Loyalty points dashboard (customer) |
+| **Frontend (Web)** | Review submission form and listing on product page |
+| **Frontend (Web)** | Review moderation screen (admin) |
+| **Frontend (Web)** | Notification preferences page (customer) |
+| **Frontend (Web)** | In-app notification center (bell icon, unread badge) |
+| **Frontend (Web)** | Bill sharing configuration screen (per company/bill-type/recipient) |
+| **Frontend (Web)** | Order import wizard with column mapping |
+| **Frontend (Web)** | Order/Invoice export with filters |
+| **Frontend (Mobile)** | Flutter: push notification integration (FCM + APNs) |
+| **Frontend (Mobile)** | Flutter: in-app notification center |
+| **Frontend (Mobile)** | Flutter: share invoice via WhatsApp from order screen |
+| **Database** | Schema additions: coupons, offers, loyalty_points, reviews, ratings, notification_templates, notification_log, push_subscriptions, bill_share_log |
 | **Infrastructure** | Message queue (RabbitMQ / AWS SQS) provisioned for async notification dispatch |
 | **Infrastructure** | Firebase project configured for FCM; APNs certificate uploaded |
 
@@ -493,12 +585,15 @@ GET    /orders/:id/invoice/pdf
 - Integration tests: Review submitted → moderation queue → published
 - Integration tests: Order placed → notification dispatched → delivery confirmed
 - E2E test: Apply coupon at checkout → cashback to wallet → push notification received
+- E2E test: Generate invoice → auto-shared to buyer via WhatsApp + email with PDF
+- E2E test: Import orders from CSV → validate → orders created with correct totals
 
 ### 4.5 Deployment Checklist
 
 - [ ] Email provider API keys in secrets vault
 - [ ] SMS provider sender ID registered and DLT-compliant (India)
 - [ ] FCM server key and APNs certificate configured
+- [ ] WhatsApp Business API approved and template messages verified
 - [ ] Message queue provisioned with dead-letter queue for failed notifications
 - [ ] Opt-out list seeded from any previous campaigns
 - [ ] Regression tests for Phases 1–3 pass
@@ -583,13 +678,15 @@ GET    /orders/:id/invoice/pdf
 | **Backend** | Service Control Service: ON/OFF/PAUSE/RESUME state machine, scheduler |
 | **Backend** | Marketplace Service: multi-shop search, split-cart order generation, proxy communication |
 | **Backend** | EOQ / ROL Service: auto-generate purchase orders, alert dispatch |
-| **Frontend** | Service Provider registration and approval screens (admin) |
-| **Frontend** | Service Provider dashboard (provider-facing) |
-| **Frontend** | Delivery zone and slot configuration UI |
-| **Frontend** | Charges management UI |
-| **Frontend** | Block/Unblock management UI (admin) |
-| **Frontend** | Service toggle controls with scheduling UI |
-| **Frontend** | Delivery tracking map (customer-facing, provider location masking) |
+| **Frontend (Web)** | Service Provider registration and approval screens (admin) |
+| **Frontend (Web)** | Service Provider dashboard (provider-facing) |
+| **Frontend (Web)** | Delivery zone and slot configuration UI |
+| **Frontend (Web)** | Charges management UI |
+| **Frontend (Web)** | Block/Unblock management UI (admin) |
+| **Frontend (Web)** | Service toggle controls with scheduling UI |
+| **Frontend (Web)** | Delivery tracking map (customer-facing, provider location masking) |
+| **Frontend (Mobile)** | Flutter: delivery driver app (order pickup, navigation, proof of delivery) |
+| **Frontend (Mobile)** | Flutter: customer delivery tracking with map |
 | **Database** | Schema additions: service_providers, delivery_zones, delivery_slots, charges_rules, blocks, service_states, payout_schedules |
 | **Infrastructure** | Maps API integration (Google Maps / Mapbox) for distance calculation and delivery estimation |
 | **Infrastructure** | Proxy communication channel for delivery driver ↔ customer calls |
@@ -614,9 +711,9 @@ GET    /orders/:id/invoice/pdf
 
 ---
 
-## Phase 6 — Intelligence
+## Phase 6 — Intelligence & AI
 
-> **Goal:** Provide role-specific dashboards, detailed business reports, AI-powered customer support, and a ticketing system. Every role from cashier to CEO can see their KPIs clearly.
+> **Goal:** Provide role-specific dashboards, detailed business reports, AI-powered customer support, the complete AI suite (RAG, OCR import, predictions, recommendations), and a ticketing system. Every role from cashier to CEO can see their KPIs clearly.
 
 ### 6.1 Scope
 
@@ -624,6 +721,7 @@ GET    /orders/:id/invoice/pdf
 |---|---|---|
 | FR-027 | Dashboards & Reports | High |
 | FR-028 | Customer Support & AI Assistance | High |
+| FR-037 | AI & Intelligence Suite | High |
 
 ### 6.2 Detailed Features
 
@@ -679,6 +777,62 @@ GET    /orders/:id/invoice/pdf
 - **AI Chatbot:** NLP intent detection, automated FAQ responses, order status inquiry, return/exchange initiation, handoff to human agent for unresolved queries, sentiment analysis for priority routing
 - **Self-Service:** Help center articles, video tutorials, interactive troubleshooting guides
 
+#### AI & Intelligence Suite (FR-037)
+- **AI-Powered Order Import from Handwritten Notes (FR-037a):**
+  - Upload photo of handwritten order/purchase note
+  - OCR + NLP extracts: item names, quantities, prices, units
+  - Fuzzy match to product master with confidence scores
+  - Review and confirm screen before import
+  - Multi-language handwriting support
+  - Learning from corrections over time
+
+- **RAG-Based User Assistance (FR-037b):**
+  - Retrieval-Augmented Generation chatbot
+  - Vector embeddings in pgvector (PostgreSQL extension)
+  - Knowledge base: products, help articles, company policies
+  - Context-aware multi-turn conversations
+  - Source citations in responses
+  - Fallback to human agent
+
+- **Product Summary & Review Intelligence (FR-037c):**
+  - AI-generated product summaries
+  - Review sentiment analysis (positive/neutral/negative)
+  - Auto-generated review highlights
+  - Fake review detection
+
+- **Predictive Analytics & Forecasting (FR-037d):**
+  - Sales forecasting (daily/weekly/monthly for future dates)
+  - Item-level demand forecasting
+  - Seasonal trend detection
+  - Stock-out prediction
+  - Customer churn prediction
+  - Forecast dashboard widgets
+
+- **Personalized Item Suggestions (FR-037e):**
+  - "Customers who searched X also bought Y"
+  - "Frequently bought together" recommendations
+  - Collaborative + content-based filtering
+  - Trending items per category/location
+
+- **Regular Order/Purchase Suggestions (FR-037f):**
+  - Predict reorder timing from purchase frequency
+  - Smart basket auto-generation
+  - Stock replenishment suggestions for owners
+  - PO suggestions for suppliers based on sales velocity
+
+- **AI-Powered First-Level Customer Support (FR-037g):**
+  - Intent classification for support queries
+  - Automated responses for common issues
+  - Ticket auto-categorization and priority
+  - Sentiment-based priority routing
+  - Suggested replies for human agents (co-pilot)
+
+- **Configuration:**
+  - Master AI toggle: global ON/OFF per company
+  - Feature-level toggles for each AI feature
+  - Confidence thresholds for automated actions (default: 80%)
+  - AI provider selection (OpenAI / Azure OpenAI / self-hosted)
+
 ### 6.3 Technical Tasks
 
 | Area | Task |
@@ -690,17 +844,33 @@ GET    /orders/:id/invoice/pdf
 | **Backend** | AI Chatbot Service: NLP integration (Dialogflow / Amazon Lex / custom LLM), intent routing |
 | **Backend** | Knowledge Base Service: CRUD for articles, full-text search |
 | **Backend** | Recommendation Engine: collaborative filtering / content-based for product suggestions |
-| **Frontend** | Customer dashboard with charts (Chart.js / Recharts) |
-| **Frontend** | Admin analytics dashboard with drill-down |
-| **Frontend** | Service provider dashboard |
-| **Frontend** | Report builder UI with filter panel and export buttons |
-| **Frontend** | Support ticket management UI (admin + customer) |
-| **Frontend** | Live chat widget (customer-facing) |
-| **Frontend** | Knowledge base / help center UI |
-| **Frontend** | AI chatbot widget with human escalation indicator |
+| **Backend** | AI OCR Service: handwritten note → structured data (OpenAI Vision / custom OCR model) |
+| **Backend** | RAG Service: document ingestion, pgvector embeddings, retrieval pipeline, LLM response generation |
+| **Backend** | Prediction Service: sales/demand forecasting (time-series ML), stock-out prediction, churn prediction |
+| **Backend** | AI Suggestion Service: personalized recommendations, reorder suggestions, smart basket |
+| **Backend** | AI Support Co-pilot: intent classification, auto-response, suggested replies for agents |
+| **Frontend (Web)** | Customer dashboard with charts (Chart.js / Recharts) |
+| **Frontend (Web)** | Admin analytics dashboard with drill-down |
+| **Frontend (Web)** | Service provider dashboard |
+| **Frontend (Web)** | Report builder UI with filter panel and export buttons |
+| **Frontend (Web)** | Support ticket management UI (admin + customer) |
+| **Frontend (Web)** | Live chat widget (customer-facing) |
+| **Frontend (Web)** | Knowledge base / help center UI |
+| **Frontend (Web)** | AI chatbot widget with human escalation indicator |
+| **Frontend (Web)** | AI OCR import screen: upload note photo → review extracted items → confirm import |
+| **Frontend (Web)** | RAG chatbot UI with source citations |
+| **Frontend (Web)** | Forecast dashboard: prediction charts, trend indicators, anomaly alerts |
+| **Frontend (Web)** | AI configuration panel (feature toggles, provider selection, confidence thresholds) |
+| **Frontend (Web)** | AI-powered product suggestions on search and cart pages |
+| **Frontend (Mobile)** | Flutter: AI chatbot (RAG-based) |
+| **Frontend (Mobile)** | Flutter: photo capture for OCR import (handwritten notes) |
+| **Frontend (Mobile)** | Flutter: personalized recommendations on home screen |
+| **Frontend (Mobile)** | Flutter: reorder suggestions with smart basket |
 | **Database** | ClickHouse (or TimescaleDB) for time-series analytics data |
-| **Database** | Schema additions: tickets, ticket_comments, chat_sessions, chat_messages, kb_articles, chatbot_sessions |
+| **Database** | Schema additions: tickets, ticket_comments, chat_sessions, chat_messages, kb_articles, chatbot_sessions, ai_embeddings, ai_predictions, ai_suggestions |
 | **Infrastructure** | ClickHouse / analytical DB cluster provisioned |
+| **Infrastructure** | pgvector extension enabled on PostgreSQL for RAG embeddings |
+| **Infrastructure** | OpenAI / Azure OpenAI API key configured in secrets vault |
 | **Infrastructure** | NLP service API key configured (Dialogflow / AWS Lex) |
 | **Infrastructure** | Scheduled report email job (cron + email provider integration) |
 
@@ -712,12 +882,18 @@ GET    /orders/:id/invoice/pdf
 - Integration tests: Support ticket created by customer → assigned to agent → SLA clock starts
 - Integration tests: Chatbot resolves FAQ query without human escalation
 - E2E test: Admin downloads monthly sales report as Excel with correct totals
+- E2E test: Upload handwritten note photo → AI extracts items → user confirms → order created
+- E2E test: Customer asks RAG chatbot "What is your return policy?" → receives correct answer with citation
+- E2E test: Forecast dashboard shows next-month prediction matching historical trend
 - Performance test: Dashboard loads in < 2 seconds with 12 months of data
 
 ### 6.5 Deployment Checklist
 
 - [ ] ClickHouse / analytical DB provisioned with data retention policy
 - [ ] Chatbot intents trained for top 20 FAQ topics
+- [ ] RAG knowledge base seeded with initial product catalog and help articles
+- [ ] AI feature toggles default to OFF (admin must explicitly enable)
+- [ ] AI API usage cost caps configured per tenant
 - [ ] Scheduled report cron jobs tested in staging for all report types
 - [ ] SLA thresholds configured (default: 1-hour first response, 24-hour resolution)
 - [ ] Regression tests for Phases 1–5 pass
@@ -798,15 +974,15 @@ GET    /orders/:id/invoice/pdf
 | **Backend** | KOT Service: KOT generation, printer dispatch, prep-time tracking |
 | **Backend** | Marketplace Service: seller onboarding, listing approval, settlement engine |
 | **Backend** | Extend Split-Cart Order Service: platform fee calculation, payout splitting |
-| **Frontend** | Welcome offer display (registration flow) |
-| **Frontend** | Referral dashboard (customer: my code, tracking, rewards) |
-| **Frontend** | Subscription management UI (customer + admin) |
-| **Frontend** | Restaurant admin: table layout designer, waiter management |
-| **Frontend** | Customer QR-scan ordering interface (mobile-optimized) |
-| **Frontend** | Waiter tablet app (iPad/Android tablet optimized) |
-| **Frontend** | Kitchen Display System screens (KDS — fullscreen, auto-refresh) |
-| **Frontend** | Bar KDS screen |
-| **Frontend** | Marketplace seller portal |
+| **Frontend (Web)** | Welcome offer display (registration flow) |
+| **Frontend (Web)** | Referral dashboard (customer: my code, tracking, rewards) |
+| **Frontend (Web)** | Subscription management UI (customer + admin) |
+| **Frontend (Web)** | Restaurant admin: table layout designer, waiter management |
+| **Frontend (Web)** | Marketplace seller portal |
+| **Frontend (Mobile)** | Flutter: customer QR-scan ordering interface (mobile-optimized) |
+| **Frontend (Mobile)** | Flutter: waiter tablet app (iPad/Android tablet optimized) |
+| **Frontend (Mobile)** | Flutter: Kitchen Display System screens (KDS — fullscreen, auto-refresh) |
+| **Frontend (Mobile)** | Flutter: Bar KDS screen |
 | **Database** | Schema additions: referrals, subscriptions, subscription_items, tables, table_orders, kds_items, restaurant_sessions, marketplace_sellers, platform_settlements |
 | **Infrastructure** | WebSocket/SSE server for real-time KDS updates |
 | **Infrastructure** | Thermal/kitchen printer integration for KOT printing |
@@ -879,17 +1055,17 @@ GET    /orders/:id/invoice/pdf
 ```
 Phase 1 (Foundation)
     ↓
-Phase 2 (Core Commerce) — requires Phase 1 auth, products, orders
+Phase 2 (Core Commerce) — requires Phase 1 auth, products, orders; adds procurement & suppliers
     ↓
-Phase 3 (Payments) — requires Phase 2 cart and order service
+Phase 3 (Payments & Accounts) — requires Phase 2 cart, order, and procurement for party ledger
     ↓
-Phase 4 (Engagement) — requires Phase 3 orders and payments (for verified purchase reviews)
+Phase 4 (Engagement) — requires Phase 3 orders and payments (for verified purchase reviews); adds WhatsApp + import/export
     ↓
 Phase 5 (Operations) — requires Phase 3 payment for provider payouts; Phase 4 for notifications
     ↓
-Phase 6 (Intelligence) — requires all prior phases' data to be meaningful
+Phase 6 (Intelligence & AI) — requires all prior phases' data; AI suite builds on products, orders, reviews
     ↓
-Phase 7 (Growth) — requires all prior phases; Restaurant builds on Phase 1 products + billing
+Phase 7 (Growth) — requires all prior phases; Restaurant builds on Phase 1 products + billing; Advanced AI extends Phase 6
 ```
 
 ---
@@ -898,22 +1074,22 @@ Phase 7 (Growth) — requires all prior phases; Restaurant builds on Phase 1 pro
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | React / Next.js (Web), React Native or Flutter (Mobile) |
-| **POS / Desktop** | Electron (desktop POS terminal) |
-| **Backend** | Node.js + Express **or** Java + Spring Boot (microservices) |
-| **API Gateway** | Kong / AWS API Gateway / Nginx |
-| **Primary DB** | PostgreSQL |
-| **Cache** | Redis |
-| **Search** | ElasticSearch or Meilisearch |
-| **Document Store** | MongoDB (for flexible/document-heavy records) |
-| **Analytics DB** | ClickHouse (time-series analytics) |
-| **Message Queue** | RabbitMQ or AWS SQS |
-| **File Storage** | AWS S3 or Azure Blob Storage |
-| **CDN** | Cloudflare or AWS CloudFront |
+| **Frontend (Web)** | Next.js 15.x (React, Server Components, App Router) |
+| **Frontend (Mobile & Desktop)** | Flutter 3.x (iOS, Android, POS Desktop) |
+| **Backend** | .NET 9 Web API (C#) |
+| **API Gateway** | YARP (Yet Another Reverse Proxy, .NET) |
+| **Primary DB** | PostgreSQL 16 (multi-schema + RLS) |
+| **Cache** | Redis 7.x |
+| **Search** | PostgreSQL pg_trgm (startup) / Meilisearch (growth) |
+| **AI/ML** | OpenAI / Azure OpenAI + LangChain |
+| **Vector DB** | pgvector (PostgreSQL extension) |
+| **Message Queue** | RabbitMQ + MassTransit |
+| **File Storage** | MinIO (dev) / AWS S3 (prod) |
+| **CDN** | Cloudflare |
 | **Containerization** | Docker |
 | **Orchestration** | Kubernetes |
 | **IaC** | Terraform |
-| **Version Control** | GitHub (monorepo) |
+| **Version Control** | GitHub (4-repo hybrid) |
 | **CI/CD** | GitHub Actions |
 
 ---
@@ -949,3 +1125,8 @@ Phase 7 (Growth) — requires all prior phases; Restaurant builds on Phase 1 pro
 | **CDN** | Content Delivery Network |
 | **NLP** | Natural Language Processing |
 | **BOGO** | Buy One Get One |
+| **PO** | Purchase Order |
+| **GRN** | Goods Received Note |
+| **RAG** | Retrieval-Augmented Generation |
+| **OCR** | Optical Character Recognition |
+| **LLM** | Large Language Model |

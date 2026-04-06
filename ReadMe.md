@@ -1692,6 +1692,356 @@ Facilitates advanced online e-commerce operations involving multi-store discover
 
 ---
 
+### 2.33 Procurement & Supplier Management
+
+**ID:** FR-033  
+**Priority:** High  
+**Module:** Procurement
+
+#### Description
+Complete procurement lifecycle management including supplier/manufacturer master, purchase orders, goods receipt, and supplier relationship tracking. A supplier or manufacturer may also be a customer — the system handles dual-role party relationships with net settlement.
+
+#### Requirements
+
+- **Supplier / Manufacturer Master:**
+  - Party Name (Individual / Organization)
+  - Party Type: Supplier, Manufacturer, or Both
+  - Dual-Role Flag — mark if the party is also a Customer (FR-002)
+  - Contact Person, Phone, Email
+  - GSTIN, PAN, TAN
+  - Bank Account details for payments
+  - Credit Limit and Payment Terms (Net 15, Net 30, Net 60, Custom)
+  - Multiple addresses (Billing, Shipping, Factory/Warehouse)
+  - Category / Product line tagging (what items they supply)
+  - Lead time (average days for delivery)
+  - Rating / Performance score (auto-calculated from history)
+  - Active / Inactive toggle with soft delete
+  - KYC document upload (License, Registration, Certificates)
+
+- **Purchase Order (PO):**
+  - Create PO from Reorder Level (ROL) auto-trigger or manual
+  - PO number (auto-generated, sequential with prefix)
+  - Select supplier from master
+  - Add items with quantity, rate, discount, tax (GST)
+  - PO total with tax breakdown
+  - Expected delivery date
+  - PO approval workflow (configurable: auto-approve below threshold, manual above)
+  - PO status: Draft → Sent → Acknowledged → Partially Received → Fully Received → Closed / Cancelled
+  - PO PDF generation and email/WhatsApp send to supplier
+  - Amendment/Revision trail for PO changes
+  - Repeat PO from previous orders
+
+- **Goods Received Note (GRN):**
+  - Receive against a PO (partial or full)
+  - Quantity received vs. ordered comparison
+  - Quality check workflow (Accept / Reject / Partial Reject)
+  - Batch and Expiry date capture on receipt
+  - Auto-update stock on GRN approval
+  - Discrepancy reporting (short supply, excess supply, quality issues)
+  - GRN linked to supplier invoice for reconciliation
+
+- **Supplier Invoice & Payment:**
+  - Record supplier invoices against GRN
+  - Match PO → GRN → Invoice (3-way matching)
+  - Payment scheduling (due date tracking)
+  - Advance payment to suppliers
+  - Debit note / Credit note management
+
+#### Enhancements
+- [ ] Supplier portal (self-service PO acknowledgment, invoice upload)
+- [ ] RFQ (Request for Quotation) workflow
+- [ ] Supplier comparison on price, lead time, quality score
+- [ ] Multi-supplier sourcing for same item
+- [ ] Consignment stock management
+- [ ] Import/Export documentation for international suppliers
+- [ ] Supplier SLA tracking with alerts
+- [ ] Bulk PO generation for multiple items/suppliers
+
+#### Shop-Level Configuration
+- **Procurement Required:** All stock-in must be linked to a Purchase Order and GRN. No ad-hoc stock additions allowed.
+- **Flexible Stock-In:** Stock can be added manually without a PO (for small shops that buy cash-and-carry).
+
+---
+
+### 2.34 Accounts & Ledger — Party Settlement
+
+**ID:** FR-034  
+**Priority:** High  
+**Module:** Accounts
+
+#### Description
+Track advance payments, pending payments, and net settlement between the company and its parties (suppliers, manufacturers, customers). A party may be both a supplier and customer — the system calculates the net amount owed in either direction.
+
+#### Requirements
+
+- **Party Ledger:**
+  - Unified ledger per party (tracks all purchase and sales transactions)
+  - Debit entries: purchases from them, advance given to them
+  - Credit entries: sales to them, payments received from them
+  - Running balance per party (who owes whom and how much)
+  - Filter by date range, transaction type, branch
+
+- **Advance Payments:**
+  - Record advance payment given to suppliers
+  - Record advance payment received from customers
+  - Advance adjustment against future invoices (auto or manual)
+  - Advance aging report (unadjusted advances by period)
+
+- **Pending Payments:**
+  - Payable: amounts the company owes to suppliers/manufacturers
+  - Receivable: amounts customers/parties owe to the company
+  - Aging analysis: 0–30 days, 31–60 days, 61–90 days, 90+ days
+  - Due date alerts via email/SMS/push notification
+  - Payment reminder automation (configurable intervals)
+
+- **Net Settlement (Dual-Role Parties):**
+  - When a party is both a supplier and customer: calculate net amount
+  - Settlement report: total purchased from party vs. total sold to party
+  - Net balance: "We owe them ₹X" or "They owe us ₹X"
+  - Settlement approval workflow before finalizing
+  - Settlement statement PDF generation (send to party for confirmation)
+
+- **Reports & Charts:**
+  - "Who Owes Us" report — all parties with receivable balances, sorted by amount
+  - "Whom We Owe" report — all parties with payable balances, sorted by amount
+  - Cash flow summary (inflow vs. outflow by period)
+  - Party-wise profit/loss summary (for dual-role parties)
+  - Dashboard chart: Top 10 receivables, Top 10 payables
+  - Dashboard chart: Aging summary (pie chart by bucket)
+
+#### Enhancements
+- [ ] Automated payment reminders via WhatsApp
+- [ ] Interest calculation on overdue payments
+- [ ] Credit scoring for parties based on payment history
+- [ ] Integration with accounting software (Tally, QuickBooks)
+- [ ] Bank reconciliation (match payments with bank statement)
+- [ ] Multi-currency ledger support
+- [ ] Party statement sharing via email/WhatsApp
+- [ ] Bulk payment processing
+
+---
+
+### 2.35 Bill Sharing (WhatsApp, Email & SMS)
+
+**ID:** FR-035  
+**Priority:** High  
+**Module:** Bill Distribution
+
+#### Description
+Automatically share invoices and bills to relevant stakeholders (product owner, company, and buyer) via WhatsApp, email, or SMS based on configuration.
+
+#### Requirements
+
+- **Bill Sharing Channels:**
+  - WhatsApp (via WhatsApp Business API)
+  - Email (with PDF invoice attachment)
+  - SMS (with short link to view/download invoice)
+
+- **Recipients (Configurable per bill type):**
+  - Buyer / Customer
+  - Company owner / Admin
+  - Branch manager
+  - Product owner (for marketplace/multi-vendor)
+  - Supplier (for purchase-related bills)
+  - Accountant
+
+- **Sharing Triggers:**
+  - Auto-share on bill generation (configurable ON/OFF)
+  - Auto-share on payment completion
+  - Manual share (ad-hoc from order/invoice screen)
+  - Bulk share (for pending/past invoices)
+
+- **Sharing Configuration:**
+  - Per-company toggle: Enable/Disable per channel (WhatsApp, Email, SMS)
+  - Per-recipient toggle: Which recipient gets which channel
+  - Per-bill-type toggle: Sales invoice, Purchase order, Credit note, Delivery challan
+  - Template customization per channel
+  - Schedule: Immediate or batched (end-of-day summary)
+
+- **WhatsApp Business API Integration:**
+  - Template message approval (per Meta/WhatsApp guidelines)
+  - Rich media: PDF attachment, order summary card
+  - Interactive buttons: "View Invoice", "Pay Now", "Download PDF"
+  - Delivery status tracking (sent, delivered, read)
+  - Rate limiting compliance
+
+#### Enhancements
+- [ ] Multi-language bill sharing (auto-detect recipient language)
+- [ ] Digital signature verification link in shared bills
+- [ ] Scheduled bill sharing (daily/weekly summary)
+- [ ] Bulk invoice sharing for B2B clients
+- [ ] WhatsApp chatbot for bill queries ("Send me last month's invoices")
+- [ ] Delivery confirmation via WhatsApp reply
+
+---
+
+### 2.36 Data Import & Export
+
+**ID:** FR-036  
+**Priority:** High  
+**Module:** Data Management
+
+#### Description
+Comprehensive import and export functionality for all master data and transactional data including orders, with AI-powered import from handwritten notes.
+
+#### Requirements
+
+- **Master Data Import/Export:**
+  - All masters: Categories, Sub-Categories, Types, Brands, Packing Sizes, UOM, Tax Rates
+  - Products / Items (with images as ZIP)
+  - Customers / Clients
+  - Suppliers / Manufacturers
+  - Inventory / Stock (opening balances)
+  - Locations / Warehouses
+  - Payment Modes
+  - Charges
+
+- **Transactional Data Import/Export:**
+  - Orders (sales orders, purchase orders)
+  - Invoices
+  - Payments
+  - Stock movements
+  - Returns & Exchanges
+
+- **Import Features:**
+  - Supported formats: CSV, Excel (.xlsx), JSON
+  - Template download for each entity (pre-formatted with required columns and sample data)
+  - Column mapping wizard (match uploaded columns to system fields)
+  - Validation and error reporting (row-level errors with fix suggestions)
+  - Preview before import (show first 10 rows)
+  - Dry run mode (validate without actually importing)
+  - Duplicate detection and handling (skip, overwrite, merge)
+  - Bulk import with progress indicator
+  - Import history and rollback (undo last import)
+
+- **Export Features:**
+  - Supported formats: CSV, Excel (.xlsx), PDF, JSON
+  - Filter-based export (export only matching records)
+  - Column selection (choose which fields to export)
+  - Scheduled export (daily/weekly to email or S3)
+  - API-based export for integrations
+
+- **AI-Powered Import from Handwritten Notes (FR-036a):**
+  - Upload photo of handwritten order note / purchase list
+  - AI (OCR + NLP) extracts: item names, quantities, prices, units
+  - Fuzzy matching to existing product master (suggest closest matches)
+  - Review and confirm screen before import
+  - Support for multiple languages and handwriting styles
+  - Confidence score per extracted field (highlight low-confidence items for manual review)
+  - Batch processing (upload multiple note images at once)
+
+#### Enhancements
+- [ ] Google Sheets / Excel Online live sync
+- [ ] ERP data import adapters (Tally, SAP, QuickBooks format)
+- [ ] Automated periodic import from FTP/SFTP
+- [ ] Data migration wizard (from competing billing software)
+- [ ] Import approval workflow for sensitive data
+- [ ] Export watermarking (company name, "Confidential" stamp)
+
+---
+
+### 2.37 AI & Intelligence Suite
+
+**ID:** FR-037  
+**Priority:** High  
+**Module:** AI & Intelligence
+
+#### Description
+AI-powered features across the platform covering OCR import, RAG-based user assistance, product intelligence, predictive analytics, personalized recommendations, and automated customer support. All AI features are configurable — each feature can be toggled ON/OFF per company from the settings screen.
+
+#### Requirements
+
+- **AI-Powered Order Import from Handwritten Notes (FR-037a):**
+  - OCR engine for handwritten note recognition (photo → structured data)
+  - NLP pipeline: extract item names, quantities, prices, units of measurement
+  - Fuzzy match extracted items to product master
+  - Multi-language handwriting support (English, Hindi, Tamil, Telugu, etc.)
+  - Confidence scoring per field — highlight uncertain matches for human review
+  - Learning from corrections (improve accuracy over time per tenant)
+
+- **RAG-Based User Assistance (FR-037b):**
+  - Retrieval-Augmented Generation chatbot for user queries
+  - Knowledge base: product catalog, help articles, company policies, FAQs
+  - Vector embeddings stored in pgvector (PostgreSQL extension)
+  - Context-aware responses using company-specific data
+  - Multi-turn conversation support
+  - Citation of sources in responses (link to relevant help article or product)
+  - Fallback to human agent when confidence is low
+  - Admin panel to manage knowledge base documents
+
+- **Product Summary & Review Intelligence (FR-037c):**
+  - AI-generated product summary from seller descriptions and specifications
+  - Review sentiment analysis (Positive / Neutral / Negative with breakdown)
+  - Auto-generated review highlights ("Customers love the durability", "Common complaint: packaging")
+  - Star rating prediction from review text
+  - Fake review detection and flagging
+  - Competitive product comparison summaries
+
+- **Predictive Analytics & Forecasting (FR-037d):**
+  - Sales forecasting: predict daily/weekly/monthly revenue for future dates
+  - Item-level demand forecasting: predict quantity sold per item per time period
+  - Seasonal trend detection and peak period alerts
+  - Stock-out prediction (which items will run out and when)
+  - Customer churn prediction (identify at-risk customers)
+  - Optimal pricing suggestions based on demand elasticity
+  - Dashboard widgets: forecast charts, trend indicators, anomaly alerts
+
+- **Personalized Item Suggestions (FR-037e):**
+  - Search-based recommendations: "Customers who searched for X also bought Y"
+  - Cart-based recommendations: "Frequently bought together"
+  - Browsing history-based suggestions
+  - Collaborative filtering (similar customers' purchase patterns)
+  - Content-based filtering (similar product attributes)
+  - Trending items within the category / location
+  - Personalized homepage feed per customer
+
+- **Regular Order / Purchase Suggestions (FR-037f):**
+  - Predict reorder timing based on purchase frequency
+  - "You usually buy X every 2 weeks — would you like to reorder?"
+  - Smart basket generation (auto-suggest repeat items)
+  - Subscription recommendations for frequently purchased items
+  - Stock replenishment suggestions for shop owners (based on sales velocity)
+  - Purchase order suggestions for suppliers (based on stock + forecast)
+
+- **AI-Powered First-Level Customer Support (FR-037g):**
+  - Intent classification for incoming support queries
+  - Automated responses for common issues (order status, return initiation, payment help)
+  - Ticket auto-categorization and priority assignment
+  - Sentiment analysis for priority routing (angry customers → escalate)
+  - Suggested replies for human agents (agent co-pilot)
+  - Resolution time prediction
+  - Post-resolution satisfaction prediction
+
+- **Other AI Application Areas (FR-037h):**
+  - **Invoice OCR:** Extract data from vendor invoices (scan to structured entry)
+  - **Smart Search:** Natural language search ("show me all electronics under 5000 that are in stock")
+  - **Dynamic Pricing:** AI-suggested prices based on demand, competition, and stock levels
+  - **Fraud Detection:** Unusual order patterns, suspicious account activity, payment fraud scoring
+  - **Image Recognition:** Auto-tag product images with categories and attributes
+  - **Demand-Based Delivery Slots:** Optimize delivery slot availability based on predicted order volumes
+  - **Inventory Anomaly Detection:** Flag unexpected stock discrepancies
+  - **Cashflow Forecasting:** Predict future cash position based on receivables, payables, and seasonal trends
+  - **Supplier Risk Scoring:** Assess supplier reliability based on delivery history and market signals
+  - **Menu Optimization (Restaurant):** Suggest menu changes based on sales data, food cost, and customer preferences
+
+#### Configuration
+- **Master AI Toggle:** Global ON/OFF switch for all AI features per company
+- **Feature-Level Toggles:** Individual ON/OFF switch for each AI feature (FR-037a through FR-037h)
+- **Data Consent:** Explicit opt-in for sharing data with AI models
+- **AI Provider Selection:** Choose between providers (OpenAI, Azure OpenAI, self-hosted LLM)
+- **Confidence Thresholds:** Configure minimum confidence score for automated actions (default: 80%)
+
+#### Enhancements
+- [ ] Custom model fine-tuning per tenant (using their own data)
+- [ ] Multi-language AI support
+- [ ] AI usage analytics dashboard (query volume, accuracy, cost)
+- [ ] A/B testing for AI recommendations
+- [ ] AI cost management (token usage tracking, budget limits)
+- [ ] On-premise AI option (for data-sensitive businesses)
+- [ ] AI model versioning and rollback
+
+---
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Security & Access (Roles & Logins)
@@ -1822,13 +2172,19 @@ The system should be configurable per business type. Below is the feature toggle
 | Online Orders | ❌ | Optional | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Delivery | ❌ | Optional | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Inventory | Basic | Full | Full | Full | Basic | Full | Basic |
+| Procurement | ❌ | Optional | ✅ | ✅ | Optional | ✅ | ❌ |
+| Accounts/Ledger | Basic | Full | Full | Full | Basic | Full | Basic |
 | GST/Tax | Basic | Full | Full | Full | Full | Full | Basic |
 | Payment Gateway | ❌ | Optional | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Barcode/QR | ✅ | ✅ | ✅ | ✅ | Optional | ✅ | ❌ |
 | Expiry Mgmt | Optional | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Reviews | ❌ | Optional | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Push Notif | ❌ | Optional | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Bill Sharing (WA) | Optional | ✅ | ✅ | ✅ | ✅ | ✅ | Optional |
+| Import/Export | Basic | Full | Full | Full | Basic | Full | Basic |
 | AI Assistance | ❌ | Optional | ✅ | ✅ | ✅ | ✅ | Optional |
+| AI OCR Import | ❌ | Optional | ✅ | ✅ | ✅ | Optional | ❌ |
+| AI Predictions | ❌ | Optional | ✅ | ✅ | ✅ | Optional | ❌ |
 | Loyalty/Offers | Basic | Full | Full | Full | Full | Optional | ❌ |
 | Dashboards | Basic | Full | Full | Full | Full | Full | Full |
 | Service Providers | ❌ | ❌ | Optional | ✅ | ✅ | ❌ | ❌ |
@@ -1839,13 +2195,13 @@ The system should be configurable per business type. Below is the feature toggle
 
 | Phase | Modules | Duration |
 |---|---|---|
-| **Phase 1 — MVP** | Company Setup, Item Master, Masters CRUD, Basic Billing, Invoice, GST Calculation | 8-10 weeks |
-| **Phase 2 — Core** | Inventory, Barcode/QR, Search, Cart, Discounts, Customer Auth | 8-10 weeks |
-| **Phase 3 — Payments** | Payment Gateway, Payment Options, Card Save, Returns/Exchange | 6-8 weeks |
-| **Phase 4 — Engagement** | Offers/Promotions, Reviews, Notifications (Email/SMS/Push) | 6-8 weeks |
+| **Phase 1 — MVP** | Company Setup, Item Master, Masters CRUD, Basic Billing, Invoice, GST Calculation, Import/Export (Masters) | 8-10 weeks |
+| **Phase 2 — Core** | Inventory, Barcode/QR (Mobile Camera + External Scanner), Search, Cart, Discounts, Customer Auth, Procurement & Suppliers | 8-10 weeks |
+| **Phase 3 — Payments** | Payment Gateway, Payment Options, Card Save, Returns/Exchange, Accounts & Ledger, Party Settlement | 6-8 weeks |
+| **Phase 4 — Engagement** | Offers/Promotions, Reviews, Notifications (Email/SMS/Push), WhatsApp Bill Sharing, Order Import/Export | 6-8 weeks |
 | **Phase 5 — Operations** | Service Provider Portal, Delivery Management, Charges, Block/Service Control | 6-8 weeks |
-| **Phase 6 — Intelligence** | Dashboards, Reports, AI Assistance, Customer Support | 8-10 weeks |
-| **Phase 7 — Growth** | Welcome Offers, Referrals, Reorder, Subscriptions, Advanced Features | 6-8 weeks |
+| **Phase 6 — Intelligence** | Dashboards, Reports, AI Suite (RAG, OCR Import, Predictions, Recommendations, AI Support), Customer Support | 8-10 weeks |
+| **Phase 7 — Growth** | Welcome Offers, Referrals, Reorder, Subscriptions, Restaurant Module, Marketplace, Advanced AI | 6-8 weeks |
 
 ---
 
@@ -1862,4 +2218,10 @@ The system should be configurable per business type. Below is the feature toggle
 | **POS** | Point of Sale |
 | **UOM** | Unit of Measurement |
 | **SKU** | Stock Keeping Unit |
+| **PO** | Purchase Order |
+| **GRN** | Goods Received Note |
+| **RAG** | Retrieval-Augmented Generation |
+| **OCR** | Optical Character Recognition |
+| **NLP** | Natural Language Processing |
+| **LLM** | Large Language Model |
 | **B**](#)
