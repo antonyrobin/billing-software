@@ -42,7 +42,7 @@ This document consolidates all architecture decisions for the billing software s
 | Decision | v1.0 (Original) | v2.0 (Proposed) | Rationale |
 |---|---|---|---|
 | **Microservices** | 20 services | 4 services + 1 gateway | Reduce ops overhead; startup team size |
-| **Frontend** | Next.js + Flutter + Electron | Flutter only | Single codebase for Web + iOS + Android + POS |
+| **Frontend** | Next.js + Flutter + Electron | Next.js (Web) + Flutter (Mobile & Desktop) | Secure server-side JWT handling for Web; native performance for Mobile & POS |
 | **Backend** | NestJS | .NET 9 Web API | Performance, type safety, mature ecosystem |
 | **Database** | PostgreSQL (per service) | PostgreSQL (single, multi-schema + RLS) | Cost, consistency, simpler ops |
 | **API Gateway** | Kong/AWS | YARP (.NET) | No extra infra; stays in .NET ecosystem |
@@ -59,7 +59,8 @@ This document consolidates all architecture decisions for the billing software s
 
 | Layer | Technology | Version | Rationale |
 |---|---|---|---|
-| **Frontend** | Flutter | 3.x | Single codebase: Web + iOS + Android + POS Desktop |
+| **Frontend (Web)** | Next.js | 15.x | Server-side rendering, secure httpOnly cookie JWT, SEO, React ecosystem |
+| **Frontend (Mobile & Desktop)** | Flutter | 3.x | Single codebase: iOS + Android + POS Desktop |
 | **Backend** | .NET Web API | 9.0 | Performance (#1 in TechEmpower), type safety, C# |
 | **API Gateway** | YARP | 2.x | Pure .NET, no extra infra, deep integration |
 | **Database** | PostgreSQL | 16 | ACID, JSONB, full-text search, RLS, extensions |
@@ -71,6 +72,8 @@ This document consolidates all architecture decisions for the billing software s
 | **Secrets** | Azure Key Vault / AWS Secrets | — | Environment-specific secure secrets |
 | **Object Storage** | MinIO (dev) / S3 (prod) | — | Files, invoices, images |
 | **DB Migrations** | EF Core + DbUp | — | Two-tool approach (schema + scripts) |
+| **AI/ML** | OpenAI / Azure OpenAI + LangChain | — | RAG, OCR, predictions, NLP chatbot |
+| **Vector DB** | pgvector (PostgreSQL extension) | — | RAG embeddings, no extra infra |
 
 ---
 
@@ -81,8 +84,8 @@ This document consolidates all architecture decisions for the billing software s
 │                              CLIENTS                                              │
 │                                                                                  │
 │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐        │
-│   │  Flutter    │   │  Flutter    │   │   Flutter   │   │   Flutter   │        │
-│   │  Web App    │   │  iOS App    │   │ Android App │   │ POS Desktop │        │
+│   │  Next.js   │   │  Flutter    │   │   Flutter   │   │   Flutter   │        │
+│   │  Web App   │   │  iOS App    │   │ Android App │   │ POS Desktop │        │
 │   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘        │
 └──────────┼─────────────────┼─────────────────┼─────────────────┼────────────────┘
            │                 │                 │                 │
@@ -179,6 +182,10 @@ The original 20-microservice design was optimal for a large team with dedicated 
 │  │  Stock   │  │ Barcode/ │  │         File Upload          │  │
 │  │  Module  │  │  QR Code │  │  (S3/MinIO integration)      │  │
 │  └──────────┘  └──────────┘  └──────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │           Procurement Module                             │   │
+│  │  (Suppliers, Manufacturers, Purchase Orders, GRN)        │   │
+│  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
@@ -196,6 +203,11 @@ The original 20-microservice design was optimal for a large team with dedicated 
 │  │ Returns  │  │              Charges Module               │    │
 │  │  Module  │  │        (Packing, Shipping, Handling)      │    │
 │  └──────────┘  └──────────────────────────────────────────┘    │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │          Accounts & Ledger Module                        │   │
+│  │   (Advance Payments, Pending Payments, Party Ledger,     │   │
+│  │    Net Settlement between Buyer ↔ Supplier)              │   │
+│  └──────────────────────────────────────────────────────────┘   │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │           Restaurant & Marketplace Module               │   │
 │  │       (KDS, Tables, Waiters, Split-Cart Logic)          │   │
@@ -212,6 +224,10 @@ The original 20-microservice design was optimal for a large team with dedicated 
 │  ┌──────────┐  ┌──────────────────────────────────────────┐    │
 │  │ Reports/ │  │              Support Tickets              │    │
 │  │Dashboard │  │         + Service Provider Mgmt           │    │
+│  └──────────┘  └──────────────────────────────────────────┘    │
+│  ┌──────────┐  ┌──────────────────────────────────────────┐    │
+│  │WhatsApp/ │  │        AI & Intelligence Module           │    │
+│  │  Share   │  │    (RAG, OCR, Predictions, Chatbot)       │    │
 │  └──────────┘  └──────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -240,6 +256,10 @@ The original 20-microservice design was optimal for a large team with dedicated 
 | Review Service | Engagement Service |
 | Report Service | Engagement Service |
 | Support Service | Engagement Service |
+| Procurement Service | Catalog Service |
+| Accounts/Ledger Service | Commerce Service |
+| AI/Intelligence Service | Engagement Service |
+| WhatsApp/Share Service | Engagement Service |
 | Gateway Service | API Gateway (YARP) |
 
 ### .NET Solution Structure
@@ -275,6 +295,7 @@ billing-backend/
 │   │   │           ├── Inventory/
 │   │   │           ├── Stock/
 │   │   │           ├── Barcode/
+│   │   │           ├── Procurement/    # Suppliers, Manufacturers, PO, GRN
 │   │   │           └── Files/
 │   │   │
 │   │   ├── Commerce/
@@ -286,14 +307,16 @@ billing-backend/
 │   │   │           ├── Payments/
 │   │   │           ├── Tax/
 │   │   │           ├── Discounts/
+│   │   │           ├── Accounts/       # Advance/Pending payments, Party Ledger
 │   │   │           └── Delivery/
 │   │   │
 │   │   └── Engagement/
 │   │       └── Engagement.API/       # Engagement Service
 │   │           └── Modules/
-│   │               ├── Notifications/
+│   │               ├── Notifications/  # Email, SMS, Push, WhatsApp
 │   │               ├── Reviews/
 │   │               ├── Reports/
+│   │               ├── AI/             # RAG, OCR, Predictions, Chatbot
 │   │               └── Support/
 │   │
 │   ├── Shared/
@@ -478,8 +501,8 @@ Storage:
     │   expires_in}     │                   │                    │
     │                   │                   │                    │
     │ Store tokens:     │                   │                    │
-    │  access  → memory (Flutter state)     │                    │
-    │  refresh → SecureStorage (device)     │                    │
+    │  Web:    access+refresh → httpOnly cookies (Next.js)       │
+    │  Mobile: access → memory, refresh → SecureStorage (device) │
     │                   │                   │                    │
     │  API Request +    │                   │                    │
     │  Bearer {token}   │                   │                    │
@@ -559,7 +582,63 @@ Gateway Validation (after logout):
 }
 ```
 
-### Flutter Token Storage
+### Next.js Token Storage (Web)
+
+```typescript
+// Next.js: JWT stored in httpOnly secure cookies (server-side)
+// Access token: httpOnly cookie (not accessible via JavaScript)
+// Refresh token: httpOnly cookie with strict SameSite policy
+
+// middleware.ts — runs on every request (Edge Runtime)
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export function middleware(request: NextRequest) {
+  const accessToken = request.cookies.get('access_token')?.value;
+  const isAuthPage = request.nextUrl.pathname.startsWith('/auth');
+
+  if (!accessToken && !isAuthPage) {
+    return NextResponse.redirect(new URL('/auth/login', request.url));
+  }
+
+  // Forward JWT to API Gateway via server-side fetch
+  const response = NextResponse.next();
+  return response;
+}
+
+// app/api/auth/login/route.ts — API Route (server-side only)
+import { cookies } from 'next/headers';
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const res = await fetch(`${process.env.API_GATEWAY_URL}/auth/otp/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+
+  const cookieStore = await cookies();
+  cookieStore.set('access_token', data.access_token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'strict',
+    maxAge: 900, // 15 minutes
+    path: '/',
+  });
+  cookieStore.set('refresh_token', data.refresh_token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'strict',
+    maxAge: 604800, // 7 days
+    path: '/api/auth',
+  });
+
+  return Response.json({ success: true });
+}
+```
+
+### Flutter Token Storage (Mobile & Desktop)
 
 ```dart
 // Secure token storage on device
@@ -634,6 +713,10 @@ PostgreSQL Database: billing_db
 │   ├── stock_entries
 │   ├── stock_adjustments
 │   ├── barcodes
+│   ├── suppliers                  # Supplier/Manufacturer master
+│   ├── purchase_orders            # Purchase orders to suppliers
+│   ├── purchase_order_items
+│   ├── goods_received_notes       # GRN on receipt
 │   └── files
 │
 ├── Schema: commerce
@@ -650,7 +733,10 @@ PostgreSQL Database: billing_db
 │   ├── discounts
 │   ├── offers
 │   ├── deliveries
-│   └── returns
+│   ├── returns
+│   ├── party_ledger               # Tracks all transactions per party
+│   ├── advance_payments            # Advance received/paid
+│   └── pending_payments            # Outstanding payable/receivable
 │
 ├── Schema: engagement
 │   ├── notifications
@@ -658,7 +744,9 @@ PostgreSQL Database: billing_db
 │   ├── reviews
 │   ├── reports
 │   ├── support_tickets
-│   └── service_providers
+│   ├── service_providers
+│   ├── ai_chat_sessions           # RAG chatbot sessions
+│   └── ai_embeddings              # pgvector embeddings for RAG
 │
 └── Schema: _migrations
     ├── ef_migrations_history
@@ -863,7 +951,7 @@ Internet User
 │                         │                              │
 │  ┌─────────────────────────────────────────────────┐  │
 │  │  Edge Cache (Static Assets Only)                 │  │
-│  │  • Flutter Web build files (JS, CSS, fonts)      │  │
+│  │  • Next.js static assets + Flutter app assets    │  │
 │  │  • Product images, invoice PDFs                  │  │
 │  │  • Cache-Control: max-age=31536000 (1 year)      │  │
 │  │  • API requests: Cache-Control: no-store         │  │
@@ -942,6 +1030,10 @@ Commerce Service                RabbitMQ                  Engagement Service
 | `StockLow` | Catalog | Engagement (alert notification) |
 | `InvoiceGenerated` | Commerce | Engagement (send PDF) |
 | `SubscriptionExpiring` | Identity | Engagement (renewal reminder) |
+| `PurchaseOrderCreated` | Catalog | Commerce (update pending payments) |
+| `GoodsReceived` | Catalog | Commerce (update stock + party ledger) |
+| `InvoiceShared` | Commerce | Engagement (WhatsApp/Email to buyer, owner) |
+| `AIInsightGenerated` | Engagement | Engagement (push notification) |
 
 ---
 
@@ -1062,16 +1154,16 @@ DatabaseMigrator starts
 
 ---
 
-## 12. Repository Strategy (3-Repo Hybrid)
+## 12. Repository Strategy (4-Repo Hybrid)
 
-### Why 3 Repos?
+### Why 4 Repos?
 
 | Concern | Solution |
 |---|---|
-| Independent deployment | Frontend and backend deploy on different schedules |
+| Independent deployment | Web, mobile, and backend deploy on different schedules |
 | Security | Infrastructure secrets isolated from app code |
 | CI/CD efficiency | Path-filtered workflows prevent unnecessary builds |
-| Team autonomy | Frontend, backend, infra teams work independently |
+| Team autonomy | Web (Next.js), mobile (Flutter), backend, infra teams work independently |
 
 ### Repository Structure
 
@@ -1098,10 +1190,45 @@ billing-backend/
     └── deploy-gateway.yml
 ```
 
-#### `billing-frontend` (Flutter monorepo)
+#### `billing-web` (Next.js Web App)
 
 ```
-billing-frontend/
+billing-web/
+├── app/                    # Next.js App Router
+│   ├── (auth)/             # Auth route group
+│   │   ├── login/
+│   │   └── register/
+│   ├── (dashboard)/        # Dashboard route group
+│   │   ├── products/
+│   │   ├── orders/
+│   │   ├── billing/
+│   │   ├── inventory/
+│   │   ├── reports/
+│   │   └── settings/
+│   ├── pos/                # POS billing screen
+│   ├── api/                # API Routes (server-side JWT proxy)
+│   │   ├── auth/
+│   │   └── proxy/[...path]/
+│   ├── layout.tsx
+│   └── page.tsx
+├── components/             # Reusable UI components
+│   ├── ui/                 # Shadcn/Radix primitives
+│   └── features/           # Feature-specific components
+├── lib/                    # Utilities, hooks, API client
+├── middleware.ts            # JWT validation, route protection
+├── public/                 # Static assets
+├── next.config.ts
+├── tailwind.config.ts
+├── package.json
+└── .github/workflows/
+    ├── ci-pr.yml
+    └── deploy-web.yml
+```
+
+#### `billing-mobile` (Flutter — Mobile & Desktop)
+
+```
+billing-mobile/
 ├── lib/
 │   ├── core/               # DI, router, theme, localization
 │   ├── features/           # Feature-first organization
@@ -1110,17 +1237,16 @@ billing-frontend/
 │   │   ├── products/
 │   │   ├── orders/
 │   │   ├── billing/
+│   │   ├── scanner/         # Native barcode/QR camera scanner
 │   │   └── reports/
 │   ├── shared/             # Shared widgets, models, utils
 │   └── main.dart
-├── web/                    # Flutter Web assets
 ├── android/                # Android project
 ├── ios/                    # iOS project
 ├── linux/                  # POS Desktop (Linux)
 ├── windows/                # POS Desktop (Windows)
 └── .github/workflows/
     ├── ci-pr.yml
-    ├── deploy-web.yml
     └── deploy-mobile.yml
 ```
 
@@ -1467,10 +1593,11 @@ Service deployments (billing-backend: services):
   Health check: /health endpoint must return 200
   Readiness probe: /ready endpoint must return 200
        │
-       ▼
-Frontend deployment (billing-frontend):
-  Flutter Web build → Cloudflare Pages deploy
-  Mobile: App store review / release
+       ├──────────────────────────────────────┐
+       ▼                                      ▼
+Web deployment (billing-web):           Mobile deployment (billing-mobile):
+  Next.js build → Vercel /              Flutter build → App Store /
+  Docker → K8s deploy                   Google Play release
 ```
 
 ### Cross-Repo Triggers (GitHub Actions)
